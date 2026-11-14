@@ -28,6 +28,8 @@ class MainActivity : ComponentActivity() {
             submitText = vm::submitText,
             simulateTire = vm::simulateTire,
             simulateArrival = vm::simulateArrival,
+            companionReady = vm::companionReady,
+            loadScenario = vm::loadScenario,
         )
         setContent {
             val state by vm.ui.collectAsStateWithLifecycle()

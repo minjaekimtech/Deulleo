@@ -10,8 +10,10 @@ import ai.deulleo.core.AgentAction
 import ai.deulleo.core.AgentReply
 import ai.deulleo.core.DeulleoAgent
 import ai.deulleo.core.SampleDay
+import ai.deulleo.core.SamplePickupDay
 import ai.deulleo.core.brief.Josa
 import ai.deulleo.core.model.Errand
+import ai.deulleo.core.model.ErrandKind
 import ai.deulleo.core.model.GeoPoint
 import ai.deulleo.core.model.MinuteOfDay
 import ai.deulleo.core.model.Plan
@@ -44,6 +46,10 @@ data class UiState(
     val tripStarted: Boolean = false,
     val arrivedAtStop: Boolean = false,
     val clock: MinuteOfDay = SampleDay.START_AT,
+    /** 시연 시나리오: true = 평일 하교 픽업, false = 주말 볼일 */
+    val pickupScenario: Boolean = false,
+    /** 마지막으로 동승 예정자에게 보낸 알림(시연 화면 표시용) */
+    val lastNotice: String = "",
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -64,15 +70,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingConfirm: (() -> Unit)? = null
     private var briefed = false
 
-    // 시연용 시계: 앱 시작 시각을 토요일 14:10으로 두고 실제 경과 시간만큼 흐릅니다.
-    private val startedAtMs = SystemClock.elapsedRealtime()
-    private fun now(): MinuteOfDay = SampleDay.START_AT + ((SystemClock.elapsedRealtime() - startedAtMs) / 60_000).toInt()
+    // 시연용 시계: 시나리오 시작 시각(주말 14:10 / 평일 15:50)부터 실제 경과 시간만큼 흐릅니다.
+    private var startedAtMs = SystemClock.elapsedRealtime()
+    private var scenarioStart: MinuteOfDay = SampleDay.START_AT
+    private fun now(): MinuteOfDay = scenarioStart + ((SystemClock.elapsedRealtime() - startedAtMs) / 60_000).toInt()
     private fun here(): GeoPoint = location.location.value ?: SampleDay.home
 
     init {
         vehicle.start(); navi.start(); voice.start(); location.start()
-        agent.setErrands(SampleDay.errands(catalog))
-        _ui.update { it.copy(errands = agent.remainingErrands) }
+        loadScenario(pickup = false)
 
         viewModelScope.launch { vehicle.state.collect(::onVehicle) }
         viewModelScope.launch { voice.utterances.collect(::onUtterance) }
@@ -95,6 +101,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         briefed = true
         apply(agent.briefing(now(), here(), _ui.value.vehicle))
     }
+
+    /** 시연 시나리오 전환: 주말 볼일 ↔ 평일 하교 픽업 */
+    fun loadScenario(pickup: Boolean) {
+        agent.setErrands(if (pickup) SamplePickupDay.errands(catalog) else SampleDay.errands(catalog))
+        scenarioStart = if (pickup) SamplePickupDay.START_AT else SampleDay.START_AT
+        startedAtMs = SystemClock.elapsedRealtime()
+        briefed = false
+        _ui.update {
+            UiState(vehicle = it.vehicle, errands = agent.remainingErrands, clock = scenarioStart, pickupScenario = pickup)
+        }
+        recomputeMode()
+    }
+
+    /** 태울 사람이 준비됨(아이 폰의 "끝났어" 버튼을 시연용으로 대신 누름) */
+    fun companionReady() = apply(agent.onCompanionReady(now(), here()))
 
     fun startTrip() = apply(AgentReply("좋아요, 안내를 시작할게요.", agent.plan, AgentAction.StartNavigation))
 
@@ -151,6 +172,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val stop = agent.plan?.nextStop ?: return
         if (_ui.value.arrivedAtStop) return
         _ui.update { it.copy(arrivedAtStop = true) }
+        if (stop.errand.kind == ErrandKind.PICKUP) {
+            // 픽업 장소 근처에 일찍 도착: 도로 대신 대기 지점 안내
+            apply(agent.waitingAdvice(now(), here()))
+            return
+        }
         val pk = stop.errand.place.parking
         say(
             if (pk != null && pk.walkMinutes > 0) "${pk.name}에 주차하세요. ${stop.errand.place.name}까지 걸어서 ${pk.walkMinutes}분이에요."
@@ -161,6 +187,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun apply(reply: AgentReply) {
         _ui.update { it.copy(plan = reply.plan ?: it.plan, errands = agent.remainingErrands) }
+        reply.notice?.let { n ->
+            // 서비스 단계: 서버 → 아이·부모님 폰 푸시(앱 미설치 시 문자 링크). 프로토타입은 화면에 표시합니다.
+            _ui.update { it.copy(lastNotice = "→ ${n.to}: ${n.text}") }
+        }
         say(reply.speech)
         if (reply.action == AgentAction.StartNavigation) {
             _ui.update { it.copy(tripStarted = true) }

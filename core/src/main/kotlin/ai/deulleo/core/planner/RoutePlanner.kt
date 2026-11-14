@@ -103,9 +103,9 @@ class RoutePlanner(
             travelTotal += leg
             val arrive = now + leg
             val begin = when (errand.kind) {
-                ErrandKind.FIXED -> {
+                ErrandKind.FIXED, ErrandKind.PICKUP -> {
                     val fixed = errand.fixedStart!!
-                    if (arrive > fixed + fixedToleranceMin) return null // 예약에 늦음
+                    if (arrive > fixed + fixedToleranceMin) return null // 예약·픽업에 늦음
                     max(arrive, fixed)
                 }
                 else -> max(arrive, errand.place.opensAt)

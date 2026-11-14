@@ -59,6 +59,8 @@ data class UiActions(
     val submitText: (String) -> Unit,
     val simulateTire: (Boolean) -> Unit,
     val simulateArrival: () -> Unit,
+    val companionReady: () -> Unit,
+    val loadScenario: (Boolean) -> Unit,
 )
 
 @Composable
@@ -162,7 +164,12 @@ private fun ManageScreen(state: UiState, a: UiActions) {
         TopLine("들러 · 볼일 인박스", state.clock.toClock())
         Spacer(Modifier.height(12.dp))
         state.errands.forEach { e ->
-            val tag = when (e.kind) { ErrandKind.FIXED -> "일정"; ErrandKind.FLEXIBLE -> "할 일"; ErrandKind.VEHICLE_CARE -> "차량" }
+            val tag = when (e.kind) {
+                ErrandKind.FIXED -> "일정"
+                ErrandKind.FLEXIBLE -> "할 일"
+                ErrandKind.VEHICLE_CARE -> "차량"
+                ErrandKind.PICKUP -> "픽업"
+            }
             val time = e.fixedStart?.toClock()?.let { " · $it" } ?: ""
             Text("[$tag] ${e.title}$time  —  ${e.place.name}", color = Body, fontSize = 20.sp, modifier = Modifier.padding(vertical = 6.dp))
         }
@@ -185,12 +192,19 @@ private fun DemoTools(state: UiState, a: UiActions) {
     var text by remember { mutableStateOf("") }
     Column(Modifier.padding(top = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Chip).padding(12.dp)) {
         Text("시연 도구 (정차 중에만 표시)", color = Sub, fontSize = 13.sp)
+        if (state.lastNotice.isNotBlank()) Text(state.lastNotice, color = Color(0xFF7FB0FF), fontSize = 14.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("타이어 경고", color = Body, fontSize = 15.sp)
             Spacer(Modifier.width(8.dp))
             Switch(checked = state.vehicle.lowTirePressure, onCheckedChange = a.simulateTire)
             Spacer(Modifier.width(16.dp))
             OutlinedButton(onClick = a.simulateArrival) { Text("도착 처리") }
+            Spacer(Modifier.width(8.dp))
+            if (state.pickupScenario) OutlinedButton(onClick = a.companionReady) { Text("아이: 끝났어") }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(onClick = { a.loadScenario(!state.pickupScenario) }) {
+                Text(if (state.pickupScenario) "주말 볼일로" else "하교 픽업으로")
+            }
             Spacer(Modifier.width(16.dp))
             Text("기어 ${state.vehicle.gear} · 연료 ${state.vehicle.fuelPercent ?: "-"}%", color = Sub, fontSize = 13.sp)
         }

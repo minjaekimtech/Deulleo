@@ -37,6 +37,13 @@ enum class ErrandKind {
 
     /** 차량 데이터가 만든 관리 할 일 (예: 타이어 공기압 점검) */
     VEHICLE_CARE,
+
+    /**
+     * 사람을 태우는 만남 (예: 아이 학원 하원, 부모님 진료 후 픽업).
+     * [Errand.fixedStart]는 "예상" 종료 시각이고, 실제 출발은 상대의 준비 신호에 맞춥니다.
+     * 일찍 도착하면 도로가 아니라 [Errand.waitSpot]에서 기다립니다.
+     */
+    PICKUP,
 }
 
 /** 사용자의 볼일 하나. */
@@ -50,9 +57,14 @@ data class Errand(
     val fixedStart: MinuteOfDay? = null,
     /** 생화·냉장식품처럼 차에 오래 두면 안 되는 물건을 사는 볼일 */
     val perishable: Boolean = false,
+    /** PICKUP: 태울 사람(예: "지우") */
+    val companion: String? = null,
+    /** PICKUP: 일찍 도착했을 때 기다릴 곳(도로 대신 근처 주차장 등) */
+    val waitSpot: Place? = null,
 ) {
     init {
         require(kind != ErrandKind.FIXED || fixedStart != null) { "FIXED 일정에는 시작 시각이 필요합니다: $title" }
+        require(kind != ErrandKind.PICKUP || fixedStart != null) { "PICKUP에는 예상 종료 시각이 필요합니다: $title" }
         require(stayMinutes >= 0)
     }
 }

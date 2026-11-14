@@ -53,6 +53,14 @@ class SamplePlaceCatalog : PlaceCatalog {
         Place("cafe-1", "쉼표 카페", "카페", "서울 광진구 능동로 (가상)", GeoPoint(37.5420, 127.0700),
             opensAt = 8 * 60, closesAt = 22 * 60, rating = 4.5,
             parking = Parking("카페 주차장", 0, "1시간 무료")),
+        Place("academy-1", "푸른수학학원", "학원", "서울 광진구 자양로 (가상)", GeoPoint(37.5360, 127.0790),
+            opensAt = 13 * 60, closesAt = 22 * 60,
+            parking = Parking("학원 후문 승하차 지점", 0, "정차 1분")),
+        Place("wait-1", "자양 공영주차장", "주차장", "서울 광진구 자양로 (가상)", GeoPoint(37.5372, 127.0805),
+            parking = Parking("자양 공영주차장", 0, "10분 300원")),
+        Place("mart-1", "자양 마트", "마트", "서울 광진구 자양로 (가상)", GeoPoint(37.5368, 127.0810),
+            opensAt = 9 * 60, closesAt = 23 * 60, rating = 4.2,
+            parking = Parking("자양 공영주차장", 1, "대기 주차장과 같은 곳")),
     )
 
     override fun search(query: String, near: GeoPoint, limit: Int): List<Place> {

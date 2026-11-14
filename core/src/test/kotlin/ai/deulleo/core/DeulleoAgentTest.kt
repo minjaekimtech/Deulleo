@@ -70,6 +70,7 @@ class IntentParserTest {
         assertEquals(VoiceIntent.RemoveErrand("꽃집"), p.parse("꽃집은 빼 줘"))
         assertEquals(VoiceIntent.NextStop, p.parse("다음 어디야?"))
         assertEquals(VoiceIntent.Reject, p.parse("아니 잠깐만"))
+        assertEquals(VoiceIntent.CompanionReady, p.parse("지우 끝났대"))
     }
 }
 
@@ -130,5 +131,38 @@ class ScenarioTest {
         val withCake = assertNotNull(cake.plan)
         assertTrue(withCake.stops.any { it.errand.place.id == "bakery-1" })
         assertTrue(cake.speech.contains("주차는 한 번만"))
+    }
+}
+
+/** 하교 픽업 부모 시나리오: 도로 대신 대기 지점, 그 사이 볼일, 준비 신호에 맞춘 출발. */
+class PickupScenarioTest {
+    private val catalog = SamplePlaceCatalog()
+
+    @Test
+    fun `after-school pickup scenario`() {
+        val agent = DeulleoAgent(SamplePickupDay.home, catalog)
+        agent.setErrands(SamplePickupDay.errands(catalog))
+
+        val brief = agent.briefing(SamplePickupDay.START_AT, SamplePickupDay.home, VehicleSnapshot(gear = GearState.PARK))
+        println("픽업 브리핑: ${brief.speech}")
+        val plan = assertNotNull(brief.plan)
+        assertTrue(plan.stops.any { it.errand.kind == ErrandKind.PICKUP })
+        assertTrue(brief.speech.contains("자양 공영주차장"))
+
+        // 일찍 도착했고, 대기 중에 장보기를 하려는 상황: 도로 대신 대기 지점 + 그 사이 볼일 제안
+        while (agent.plan?.nextStop?.errand?.kind != ErrandKind.PICKUP) agent.completeCurrentStop()
+        agent.setErrands(agent.remainingErrands + SamplePickupDay.errands(catalog).filter { it.id == "mart" })
+        val academy = catalog.places.first { it.id == "academy-1" }.location
+        val wait = agent.waitingAdvice(16 * 60 + 5, academy)
+        println("대기 안내: ${wait.speech}")
+        assertTrue(wait.speech.contains("25분 남았어요"))
+        assertTrue(wait.speech.contains("자양 공영주차장"))
+
+        // 아이가 "끝났어" → 출발 안내 + 아이에게 도착 알림
+        val waitSpot = catalog.places.first { it.id == "wait-1" }.location
+        val ready = agent.onUtterance("지우 끝났대", 16 * 60 + 28, waitSpot)
+        println("준비 신호: ${ready.speech} / 알림: ${ready.notice}")
+        assertEquals(AgentAction.StartNavigation, ready.action)
+        assertEquals("지우", ready.notice?.to)
     }
 }

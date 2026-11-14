@@ -5,6 +5,8 @@ sealed interface VoiceIntent {
     data object Confirm : VoiceIntent
     data object Reject : VoiceIntent
     data object NextStop : VoiceIntent
+    /** 태울 사람이 준비됨: "지우 끝났대", "엄마 진료 다 끝났대" */
+    data object CompanionReady : VoiceIntent
     data class AddErrand(val item: String) : VoiceIntent
     data class RemoveErrand(val item: String) : VoiceIntent
     data class Delay(val minutes: Int) : VoiceIntent
@@ -36,6 +38,7 @@ class RuleBasedIntentParser : IntentParser {
 
         parseDelay(text)?.let { return VoiceIntent.Delay(it) }
         if (text.contains("다음") && (text.contains("어디") || text.contains("뭐"))) return VoiceIntent.NextStop
+        if (listOf("끝났대", "끝났어", "나왔대", "나왔어", "다 됐대", "준비됐대").any { text.contains(it) }) return VoiceIntent.CompanionReady
 
         removeRegex.find(text)?.let { m ->
             val item = cleanItem(m.groupValues[1])

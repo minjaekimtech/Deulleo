@@ -12,6 +12,7 @@ import ai.deulleo.core.planner.HaversineEstimator
 import ai.deulleo.core.planner.ItemCategories
 import ai.deulleo.core.planner.PlaceCatalog
 import ai.deulleo.core.planner.RoutePlanner
+import ai.deulleo.core.planner.TravelTimeEstimator
 import ai.deulleo.core.vehicle.VehicleCareRules
 import ai.deulleo.core.vehicle.VehicleSnapshot
 import ai.deulleo.core.voice.IntentParser
@@ -25,11 +26,15 @@ sealed interface AgentAction {
     data object None : AgentAction
 }
 
-/** 에이전트 응답: 음성으로 읽을 문장 + 갱신된 계획 + 앱이 할 동작. */
+/** 태울 사람(아이·부모님)의 폰으로 보내는 알림. 예: "엄마 4분 뒤 후문 도착" */
+data class CompanionNotice(val to: String, val text: String)
+
+/** 에이전트 응답: 음성으로 읽을 문장 + 갱신된 계획 + 앱이 할 동작 + (선택) 동승 예정자 알림. */
 data class AgentReply(
     val speech: String,
     val plan: Plan?,
     val action: AgentAction = AgentAction.None,
+    val notice: CompanionNotice? = null,
 )
 
 /**
@@ -45,7 +50,11 @@ class DeulleoAgent(
     private val planner: RoutePlanner = RoutePlanner(),
     private val parser: IntentParser = RuleBasedIntentParser(),
     private val homeBy: MinuteOfDay? = null,
+    private val travel: TravelTimeEstimator = HaversineEstimator(),
 ) {
+    /** 픽업은 주차 없이 승하차 지점에 잠깐 서므로 주차 여유 시간을 1분만 둡니다. */
+    private val curbTravel: TravelTimeEstimator = HaversineEstimator(parkingOverheadMin = 1)
+
     private val errands = mutableListOf<Errand>()
     private var careAdded = false
 
@@ -78,6 +87,10 @@ class DeulleoAgent(
         errands.firstOrNull { it.kind == ErrandKind.FIXED }?.let {
             sb.append("오늘 ${it.fixedStart!!.toClock()} ${it.title} 일정이 있어요. ")
         }
+        errands.firstOrNull { it.kind == ErrandKind.PICKUP }?.let {
+            sb.append("${it.fixedStart!!.toClock()}에 ${Josa.iGa(it.title)} 있어요. ")
+            it.waitSpot?.let { w -> sb.append("일찍 도착하면 도로 대신 ${w.name}에서 기다리시면 돼요. ") }
+        }
         if (careNotes.isNotEmpty()) {
             sb.append("차량 점검이 필요해서 ${Josa.eulReul(careNotes.joinToString(", "))} 경로에 넣었어요. ")
         }
@@ -107,6 +120,7 @@ class DeulleoAgent(
             is VoiceIntent.AddErrand -> addErrand(intent.item, now, here)
             is VoiceIntent.RemoveErrand -> removeErrand(intent.item, now, here)
             is VoiceIntent.Delay -> delay(intent.minutes, now, here)
+            VoiceIntent.CompanionReady -> onCompanionReady(now, here)
             is VoiceIntent.Unknown -> AgentReply("죄송해요, 다시 한번 말씀해 주세요.", plan)
         }
 
@@ -116,6 +130,50 @@ class DeulleoAgent(
         errands.removeAll { it.id == done.id }
         plan = plan?.let { it.copy(stops = it.stops.drop(1)) }
         return done
+    }
+
+    // ---- 만남(픽업) ----
+
+    /**
+     * 픽업 장소 근처에 일찍 도착했을 때의 안내.
+     * 학원 앞 도로에서 기다리는 대신 대기 지점으로 보내고, 남은 시간이 충분하면 근처 볼일을 제안합니다.
+     */
+    fun waitingAdvice(now: MinuteOfDay, here: GeoPoint): AgentReply {
+        val pickup = plan?.nextStop?.errand?.takeIf { it.kind == ErrandKind.PICKUP }
+            ?: return AgentReply("지금 기다릴 픽업 일정이 없어요.", plan)
+        val left = pickup.fixedStart!! - now
+        if (left <= 3) return AgentReply("곧 끝날 시간이에요. ${pickup.place.parking?.name ?: pickup.place.name}로 가시면 돼요.", plan)
+
+        val sb = StringBuilder("끝나려면 ${left}분 남았어요. ")
+        val spot = pickup.waitSpot
+        if (spot != null) {
+            sb.append("${pickup.place.name} 앞 도로 대신 ${spot.name}(차로 ${curbTravel.minutes(here, spot.location)}분)에서 기다리세요. ")
+            val back = curbTravel.minutes(spot.location, pickup.place.location)
+            val errand = errands.firstOrNull {
+                it.kind == ErrandKind.FLEXIBLE &&
+                    HaversineEstimator.haversineKm(it.place.location, spot.location) < 0.5 &&
+                    it.stayMinutes + back + 5 <= left
+            }
+            if (errand != null) sb.append("그 사이 ${errand.place.name}에서 ${Josa.eulReul(errand.title.removeSuffix(" 사기"))} 하실 시간도 돼요. ")
+        }
+        val who = pickup.companion ?: "상대방"
+        sb.append("${Josa.iGa(who)} 끝났다고 알리면 바로 출발 안내할게요.")
+        return AgentReply(sb.toString(), plan)
+    }
+
+    /** 태울 사람이 준비됐다는 신호(아이 폰의 "끝났어" 버튼, 학원 하원 알림, 또는 운전자의 "끝났대"). */
+    fun onCompanionReady(now: MinuteOfDay, here: GeoPoint): AgentReply {
+        val pickup = errands.firstOrNull { it.kind == ErrandKind.PICKUP }
+            ?: return AgentReply("기다리는 픽업 일정이 없어요.", plan)
+        val minutes = curbTravel.minutes(here, pickup.place.location)
+        val point = pickup.place.parking?.name ?: pickup.place.name
+        val who = pickup.companion ?: "상대방"
+        return AgentReply(
+            speech = "${Josa.iGa(who)} 준비됐대요. 지금 출발하면 ${minutes}분 뒤 $point 도착이에요. ${who}에게도 알렸어요.",
+            plan = plan,
+            action = AgentAction.StartNavigation,
+            notice = CompanionNotice(who, "${minutes}분 뒤 $point 도착해요. 그쪽에서 기다려 줘. (${(now + minutes).toClock()} 도착 예정)"),
+        )
     }
 
     // ---- 내부 동작 ----

@@ -21,3 +21,24 @@ object SampleDay {
         )
     }
 }
+
+/**
+ * 시연용 평일: 15:50 출발, 16:30 아이(지우) 학원 하원 픽업, 할 일 "장보기".
+ * 일찍 도착하면 학원 앞 도로 대신 공영주차장에서 기다리고, 그 사이 장보기를 합니다.
+ */
+object SamplePickupDay {
+    val home = SampleDay.home
+    const val START_AT = 15 * 60 + 50
+    const val PICKUP_AT = 16 * 60 + 30
+
+    fun errands(catalog: SamplePlaceCatalog): List<Errand> {
+        fun place(id: String) = catalog.places.first { it.id == id }
+        return listOf(
+            Errand(
+                "pickup", "지우 학원 하원", ErrandKind.PICKUP, place("academy-1"), stayMinutes = 2,
+                fixedStart = PICKUP_AT, companion = "지우", waitSpot = place("wait-1"),
+            ),
+            Errand("mart", "장보기", ErrandKind.FLEXIBLE, place("mart-1"), stayMinutes = 15),
+        )
+    }
+}
