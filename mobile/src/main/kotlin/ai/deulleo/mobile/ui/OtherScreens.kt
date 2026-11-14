@@ -1,8 +1,10 @@
 package ai.deulleo.mobile.ui
 
-import ai.deulleo.mobile.ALL_DRIVING_STYLES
 import ai.deulleo.mobile.ALL_TASTES
 import ai.deulleo.mobile.MobileState
+import ai.deulleo.mobile.PICKUP_DAYS
+import ai.deulleo.mobile.TODAY
+import ai.deulleo.mobile.weekdayOf
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -36,55 +37,40 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.time.LocalDate
-import java.time.YearMonth
 
-/** 시연용: 오늘(11/14) 외의 날짜에 들어 있는 일정 */
-private val SAMPLE_EVENTS: Map<Int, List<Pair<String, String>>> = mapOf(
-    3 to listOf("16:30" to "지우 학원 하원"),
-    5 to listOf("16:30" to "지우 학원 하원"),
-    10 to listOf("16:30" to "지우 학원 하원"),
-    12 to listOf("16:30" to "지우 학원 하원", "19:00" to "세탁물 찾기"),
-    17 to listOf("16:30" to "지우 학원 하원"),
-    19 to listOf("16:30" to "지우 학원 하원"),
-    21 to listOf("11:00" to "엄마 생신 모임"),
-    24 to listOf("16:30" to "지우 학원 하원"),
-    26 to listOf("16:30" to "지우 학원 하원"),
-)
-private const val TODAY = 14
+/** 시연용 달력 내용: 날짜별로 들어 있는 일정 (시각, 이름, 출처) */
+private fun eventsOf(day: Int): List<Triple<String, String, String>> = when {
+    day == TODAY -> listOf(Triple("15:00", "미용실", "캘린더"), Triple("할 일", "엄마 생신 꽃 사기", "메모"))
+    day in PICKUP_DAYS -> listOf(Triple("16:30", "지우 학원 하원", "시간표 · 매주 화·목"), Triple("할 일", "장보기", "메모"))
+    day == 21 -> listOf(Triple("11:00", "엄마 생신 모임", "캘린더"))
+    else -> emptyList()
+}
 
-/** 캘린더: 월간 달력 + 선택한 날의 일정 */
+private const val DAYS_IN_MONTH = 30
+private const val FIRST_OFFSET = 0 // 2026년 11월 1일은 일요일
+
+/** 캘린더: 월간 달력에서 날짜를 고르면 그날 들어 있는 일정과 동선으로 가는 버튼이 나옵니다. */
 @Composable
-fun CalendarScreen(state: MobileState, onMenu: () -> Unit) {
-    var selected by remember { mutableIntStateOf(TODAY) }
-    val firstOffset = LocalDate.of(2026, 11, 1).dayOfWeek.value % 7 // 일요일 = 0
-    val days = YearMonth.of(2026, 11).lengthOfMonth()
-
+fun CalendarScreen(state: MobileState, onOpenDay: (Int) -> Unit) {
+    var selected by remember { mutableIntStateOf(state.day) }
     Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 110.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 110.dp),
     ) {
-        TopBar("캘린더", onMenu)
-        Text(
-            "2026년 11월", color = DColor.Text, fontSize = 25.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 18.dp, bottom = 18.dp),
-        )
+        TopBar("캘린더")
+        Text("2026년 11월", color = DColor.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp, bottom = 18.dp))
         Row(Modifier.fillMaxWidth()) {
             listOf("일", "월", "화", "수", "목", "금", "토").forEach {
                 Text(it, color = DColor.Sub, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
             }
         }
-        val rows = (firstOffset + days + 6) / 7
+        val rows = (FIRST_OFFSET + DAYS_IN_MONTH + 6) / 7
         for (r in 0 until rows) {
             Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
                 for (c in 0 until 7) {
-                    val day = r * 7 + c - firstOffset + 1
+                    val day = r * 7 + c - FIRST_OFFSET + 1
                     Box(Modifier.weight(1f).height(42.dp), contentAlignment = Alignment.Center) {
-                        if (day in 1..days) {
+                        if (day in 1..DAYS_IN_MONTH) {
                             val isSel = day == selected
-                            val hasEvent = day == TODAY || SAMPLE_EVENTS.containsKey(day)
                             val circle = Modifier.size(34.dp).clip(CircleShape)
                             Box(
                                 (if (isSel) circle.background(DColor.Text) else circle).clickable { selected = day },
@@ -92,12 +78,12 @@ fun CalendarScreen(state: MobileState, onMenu: () -> Unit) {
                             ) {
                                 Text(
                                     day.toString(),
-                                    color = if (isSel) DColor.Ink else DColor.Text,
+                                    color = when { isSel -> DColor.Ink; day < TODAY -> DColor.Sub; else -> DColor.Text },
                                     fontSize = 14.sp,
-                                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                                    fontWeight = if (isSel || day == TODAY) FontWeight.Bold else FontWeight.Normal,
                                 )
                             }
-                            if (hasEvent && !isSel) {
+                            if (eventsOf(day).isNotEmpty() && !isSel) {
                                 Box(Modifier.align(Alignment.BottomCenter).size(4.dp).clip(CircleShape).background(DColor.Acc))
                             }
                         }
@@ -106,92 +92,74 @@ fun CalendarScreen(state: MobileState, onMenu: () -> Unit) {
             }
         }
 
-        SectionLabel("11월 ${selected}일")
+        SectionLabel("11월 ${selected}일 ${weekdayOf(selected)}요일" + if (selected == TODAY) " · 오늘" else "")
         Divider()
-        val events: List<Pair<String, String>> =
-            if (selected == TODAY) state.cards.map { it.time to it.title } else SAMPLE_EVENTS[selected].orEmpty()
+        val events = eventsOf(selected)
         if (events.isEmpty()) {
-            Text("이 날은 일정이 없어요.", color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 14.dp))
+            Text("들어 있는 일정이 없어요.", color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 14.dp))
         }
-        events.forEach { (time, title) ->
-            Row(Modifier.padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(time, color = DColor.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(58.dp))
-                Text(title, color = DColor.Text, fontSize = 15.sp)
+        events.forEach { (time, title, source) ->
+            Row(Modifier.padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(time, color = if (time == "할 일") DColor.Sub else DColor.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(60.dp))
+                Text(title, color = DColor.Text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                Text(source, color = DColor.Sub, fontSize = 12.sp)
             }
             Divider()
+        }
+        if (selected == TODAY || selected in PICKUP_DAYS) {
+            PrimaryButton("이 날 동선 보기", Modifier.padding(top = 18.dp).fillMaxWidth()) { onOpenDay(selected) }
         }
     }
 }
 
-/** 내 정보: 자주 가는 곳 · 이동 성향 · 취향 · 차량 */
+/** 내 정보: 자주 가는 곳, 취향, 연결 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     state: MobileState,
-    onMenu: () -> Unit,
-    onToggleStyle: (String) -> Unit,
     onToggleTaste: (String) -> Unit,
+    onRecommend: (Boolean) -> Unit,
+    onCar: (Boolean) -> Unit,
 ) {
     Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 110.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 110.dp),
     ) {
-        TopBar("내 정보", onMenu)
+        TopBar("내 정보")
 
         SectionLabel("자주 가는 곳")
+        Divider()
         InfoRow("집", state.homeAddress)
         InfoRow("회사", state.workAddress)
-        state.favorites.forEachIndexed { i, name -> InfoRow("즐겨찾기 ${i + 1}", name) }
+        state.favorites.forEach { InfoRow("단골", it) }
 
-        SectionLabel("이동 성향")
-        VSpace(6)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ALL_DRIVING_STYLES.forEach { s -> Chip(s, s in state.drivingStyles) { onToggleStyle(s) } }
-        }
-
-        SectionLabel("취향 · 가는 길 추천에 쓰여요")
-        VSpace(6)
+        SectionLabel("취향")
+        Text("가는 길에 들를 만한 곳을 고를 때 참고해요.", color = DColor.Sub, fontSize = 13.sp, modifier = Modifier.padding(bottom = 10.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ALL_TASTES.forEach { t -> Chip(t, t in state.tastes) { onToggleTaste(t) } }
         }
 
-        SectionLabel("차량")
-        InfoRow("연결", if (state.carConnected) "더 뉴 그랜저 · 연결됨" else "연결 안 됨")
+        SectionLabel("연결")
+        Divider()
+        ToggleRow("내 차 · 그랜저", if (state.carConnected) "타이어·연료 상태를 일정에 반영해요" else "연결하면 차 상태를 일정에 반영해요", state.carConnected, onCar)
+        ToggleRow("가는 길 추천", "취향에 맞는 곳을 동선 사이에 제안해요", state.recommendOn, onRecommend)
+        InfoRow("캘린더", "기기 캘린더 · 장소가 있는 일정을 가져와요")
     }
 }
 
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.width(84.dp))
+        Text(label, color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.width(60.dp))
         Text(value, color = DColor.Text, fontSize = 15.sp)
     }
     Divider()
 }
 
-/** 메뉴: 가는 길 추천 켜기/끄기, 차량 연결 */
-@Composable
-fun MenuSheet(
-    state: MobileState,
-    onRecommend: (Boolean) -> Unit,
-    onCar: (Boolean) -> Unit,
-) {
-    Text("메뉴", color = DColor.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
-    ToggleRow("가는 길 추천", "취향에 맞는 곳을 동선 사이에 제안해요", state.recommendOn, onRecommend)
-    ToggleRow(
-        "차량 연결",
-        if (state.carConnected) "연결됨 · 차량 알림이 일정에 반영돼요" else "연결 안 됨",
-        state.carConnected, onCar,
-    )
-}
-
 @Composable
 private fun ToggleRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = DColor.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, color = DColor.Text, fontSize = 15.sp)
             Text(desc, color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         Switch(
@@ -203,22 +171,4 @@ private fun ToggleRow(title: String, desc: String, checked: Boolean, onChange: (
         )
     }
     Divider()
-}
-
-/** 화면 아래에서 올라오는 시트(일정 추가·메뉴 공용). 바깥을 누르면 닫힙니다. */
-@Composable
-fun BottomSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().background(DColor.Ink.copy(alpha = 0.6f)).clickable(onClick = onDismiss)) {
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
-                .background(DColor.Surf)
-                .clickable(enabled = false) {}
-                .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 30.dp),
-        ) {
-            content()
-        }
-    }
 }

@@ -100,7 +100,7 @@ class DeulleoAgent(
         }
         p.nextStop?.let { first ->
             sb.append("첫 목적지 ${first.errand.place.name}에 ${first.arriveAt.toClock()} 도착 예정이에요")
-            first.errand.place.parking?.let { pk -> sb.append(", 주차는 ${pk.name}${if (pk.note.isNotBlank()) "(${pk.note})" else ""}") }
+            first.errand.place.parking?.takeIf { it.note.isNotBlank() }?.let { pk -> sb.append(", 주차는 ${pk.name}(${pk.note})") }
             sb.append(". ")
         }
         sb.append("집에는 ${p.homeArriveAt.toClock()}쯤 도착해요. 이대로 갈까요?")
@@ -134,6 +134,60 @@ class DeulleoAgent(
 
     /** 화면에서 품목을 직접 추가합니다(음성 "…도 사야 해"와 같은 동작). */
     fun addItem(item: String, now: MinuteOfDay, here: GeoPoint): AgentReply = addErrand(item.trim(), now, here)
+
+    /** 이미 장소와 시각이 정해진 일정을 넣습니다(예: 예약 문자에서 인식한 일정). */
+    fun addErrandDirect(errand: Errand, now: MinuteOfDay, here: GeoPoint): AgentReply {
+        if (errands.any { it.id == errand.id }) return AgentReply("", plan)
+        val trial = planner.plan(here, now, home, errands + errand, homeBy)
+            ?: return AgentReply("${Josa.eulReul(errand.title)} 넣으면 시간이 맞지 않아요.", plan)
+        errands += errand
+        plan = trial
+        val moved = rebalance(now, here)
+        return AgentReply(listOfNotNull("${Josa.eulReul(errand.title)} 동선에 넣었어요.", moved).joinToString(" "), plan)
+    }
+
+    /**
+     * 일정이 바뀐 뒤, 가게가 정해지지 않은 할 일을 더 가까운 같은 업종 가게로 옮기면 귀가가 빨라지는지 봅니다.
+     * 8분 이상 빨라질 때만 옮기고, 무엇을 왜 바꿨는지 문장으로 돌려줍니다.
+     */
+    fun rebalance(now: MinuteOfDay, here: GeoPoint): String? {
+        val current = plan ?: return null
+        var best: Triple<Int, Place, Plan>? = null
+        errands.forEachIndexed { i, e ->
+            if (e.kind != ErrandKind.FLEXIBLE) return@forEachIndexed
+            for (anchor in errands.filter { it.id != e.id }) {
+                for (alt in catalog.search(e.place.category, anchor.place.location, 2)) {
+                    if (alt.id == e.place.id) continue
+                    val trial = errands.toMutableList().also { it[i] = e.copy(place = alt) }
+                    val p = planner.plan(here, now, home, trial, homeBy) ?: continue
+                    if (p.homeArriveAt <= current.homeArriveAt - 8 && (best == null || p.homeArriveAt < best!!.third.homeArriveAt)) {
+                        best = Triple(i, alt, p)
+                    }
+                }
+            }
+        }
+        val (i, alt, p) = best ?: return null
+        val moved = errands[i]
+        errands[i] = moved.copy(place = alt)
+        plan = p
+        val neighbor = errands.firstOrNull {
+            it.id != moved.id && HaversineEstimator.haversineKm(it.place.location, alt.location) < 0.3
+        }
+        return if (neighbor != null) "${Josa.eunNeun(moved.title)} ${neighbor.place.name} 옆 ${Josa.euroRo(alt.name)} 바꿨어요. 주차는 한 번이면 돼요."
+        else "${Josa.eunNeun(moved.title)} 더 가까운 ${Josa.euroRo(alt.name)} 바꿨어요."
+    }
+
+    /** 같은 볼일을 다른 가게에서 하도록 바꿉니다. */
+    fun swapPlace(errandId: String, newPlace: Place, now: MinuteOfDay, here: GeoPoint): AgentReply {
+        val i = errands.indexOfFirst { it.id == errandId }
+        if (i < 0) return AgentReply("", plan)
+        val trial = errands.toMutableList().also { it[i] = it[i].copy(place = newPlace) }
+        val p = planner.plan(here, now, home, trial, homeBy)
+            ?: return AgentReply("${Josa.euroRo(newPlace.name)} 바꾸면 시간이 맞지 않아요.", plan)
+        errands.clear(); errands += trial
+        plan = p
+        return AgentReply("${Josa.euroRo(newPlace.name)} 바꿨어요.", plan)
+    }
 
     /** 화면에서 일정을 지웁니다. */
     fun removeById(id: String, now: MinuteOfDay, here: GeoPoint): AgentReply {

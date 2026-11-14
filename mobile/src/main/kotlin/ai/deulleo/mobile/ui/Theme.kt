@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 절제된 무채색 팔레트. 색이 있는 곳은 동선(경로 선)을 그리는 [Acc] 하나뿐입니다.
+ * 절제된 무채색 팔레트. 색은 두 곳에만 씁니다: 동선(경로 선·바뀐 일정)의 [Acc], 차량 알림의 [Warn].
  * 그라데이션·글로우·이모지를 쓰지 않고, 카드 대신 얇은 구분선으로 정보를 나눕니다.
  */
 object DColor {
@@ -34,21 +31,21 @@ object DColor {
     val Surf = Color(0xFF1C2026)
     val Line = Color(0xFF2C313A)
     val Sub = Color(0xFF8B929E)
+    val Soft = Color(0xFFBFC5CF)
     val Text = Color(0xFFF4F5F7)
     val Acc = Color(0xFF7CC4E8)
     val Warn = Color(0xFFE8A87C)
     val Ink = Color(0xFF14171C)
 }
 
-/** 화면 맨 위: 왼쪽 작은 라벨(날짜·화면 이름), 오른쪽 메뉴 */
+/** 화면 맨 위: 왼쪽 라벨(날짜·화면 이름), 오른쪽 선택적 텍스트 버튼 */
 @Composable
-fun TopBar(label: String, onMenu: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+fun TopBar(label: String, action: String? = null, onAction: () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.weight(1f))
-        Icon(
-            Icons.Filled.Menu, contentDescription = "메뉴", tint = DColor.Text,
-            modifier = Modifier.size(24.dp).clickable(onClick = onMenu),
-        )
+        if (action != null) {
+            Text(action, color = DColor.Text, fontSize = 14.sp, modifier = Modifier.clickable(onClick = onAction).padding(4.dp))
+        }
     }
 }
 
