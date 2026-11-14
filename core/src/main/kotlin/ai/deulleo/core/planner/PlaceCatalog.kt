@@ -60,7 +60,7 @@ class SamplePlaceCatalog : PlaceCatalog {
             parking = Parking("자양 공영주차장", 0, "10분 300원")),
         Place("mart-1", "자양 마트", "마트", "서울 광진구 자양로 (가상)", GeoPoint(37.5368, 127.0810),
             opensAt = 9 * 60, closesAt = 23 * 60, rating = 4.2,
-            parking = Parking("자양 공영주차장", 1, "대기 주차장과 같은 곳")),
+            parking = Parking("자양 공영주차장", 1, "하원 기다리는 주차장과 같아요")),
     )
 
     override fun search(query: String, near: GeoPoint, limit: Int): List<Place> {

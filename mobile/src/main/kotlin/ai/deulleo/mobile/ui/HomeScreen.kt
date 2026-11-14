@@ -2,6 +2,7 @@ package ai.deulleo.mobile.ui
 
 import ai.deulleo.core.model.ErrandKind
 import ai.deulleo.mobile.MobileState
+import ai.deulleo.mobile.Notice
 import ai.deulleo.mobile.Recommendation
 import ai.deulleo.mobile.StopRow
 import ai.deulleo.mobile.VehicleNotice
@@ -53,7 +54,7 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
             .padding(start = 24.dp, end = 24.dp, top = 28.dp, bottom = 150.dp),
     ) {
-        TopBar(state.dateLabel, if (state.isToday) null else "오늘로", onToday)
+        TopBar(listOf(state.dateLabel, state.nowLabel).filter { it.isNotBlank() }.joinToString(" · "), if (state.isToday) null else "오늘 보기", onToday)
 
         if (state.rows.isEmpty()) {
             Text("일정이 없는 날이에요", color = DColor.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
@@ -63,14 +64,14 @@ fun HomeScreen(
 
         Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.Bottom) {
             Text(state.leaveAt, color = DColor.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold)
-            Text("에 출발하세요", color = DColor.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp, bottom = 9.dp))
+            Text("에 출발하세요", color = DColor.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 1.dp, bottom = 9.dp))
         }
         Text(
             "${state.headlineSub} · ${state.homeArrive} 집 도착",
             color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp),
         )
 
-        if (state.notice.isNotBlank()) NoticeBar(state.notice)
+        state.notice?.let { NoticeBar(it) }
         state.vehicle?.let { VehicleCard(it, onRemoveCare, onRestoreCare) }
 
         // 동선 지도 미리보기
@@ -78,7 +79,7 @@ fun HomeScreen(
             Modifier
                 .padding(top = 16.dp)
                 .fillMaxWidth()
-                .height(168.dp)
+                .height(124.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .clickable(onClick = onOpenMap),
         ) {
@@ -86,8 +87,8 @@ fun HomeScreen(
             Text(
                 "지도에서 보기", color = DColor.Text, fontSize = 12.sp,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(10.dp)
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(DColor.Bg.copy(alpha = 0.88f))
                     .padding(horizontal = 9.dp, vertical = 5.dp),
@@ -103,6 +104,7 @@ fun HomeScreen(
         }
         LegRow(state.homeLegMinutes, 0)
         EndpointRow(state.homeArrive, "집 도착")
+        state.laterToday?.let { (time, title) -> EndpointRow(time, "$title · 캘린더") }
 
         state.recommendation?.let { SuggestionRow(it, onAcceptReco, onDismissReco) }
     }
@@ -110,12 +112,17 @@ fun HomeScreen(
 
 /** 계획이 바뀐 직후 무엇이 달라졌는지 알려 줍니다. */
 @Composable
-private fun NoticeBar(text: String) {
+private fun NoticeBar(notice: Notice) {
     Row(
         Modifier.padding(top = 14.dp).fillMaxWidth().height(IntrinsicSize.Min).clip(RoundedCornerShape(8.dp)).background(DColor.Surf),
     ) {
         Box(Modifier.width(3.dp).fillMaxHeight().background(DColor.Acc))
-        Text(text, color = DColor.Text, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp))
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Text(notice.title, color = DColor.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            if (notice.body.isNotBlank()) {
+                Text(notice.body, color = DColor.Soft, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 3.dp))
+            }
+        }
     }
 }
 
@@ -124,8 +131,8 @@ private fun NoticeBar(text: String) {
 private fun VehicleCard(v: VehicleNotice, onRemove: () -> Unit, onRestore: () -> Unit) {
     val shape = RoundedCornerShape(10.dp)
     Column(
-        Modifier.padding(top = 16.dp).fillMaxWidth().clip(shape).background(DColor.Surf).border(1.dp, DColor.Line, shape)
-            .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+        Modifier.padding(top = 14.dp).fillMaxWidth().clip(shape).background(DColor.Surf).border(1.dp, DColor.Line, shape)
+            .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(DColor.Warn))
@@ -136,7 +143,7 @@ private fun VehicleCard(v: VehicleNotice, onRemove: () -> Unit, onRestore: () ->
                 modifier = Modifier.clickable(onClick = if (v.included) onRemove else onRestore).padding(horizontal = 8.dp, vertical = 2.dp),
             )
         }
-        Text(v.title, color = DColor.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 5.dp))
+        Text(v.title, color = DColor.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 3.dp))
         Text(v.detail, color = DColor.Sub, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 2.dp, end = 8.dp))
     }
 }

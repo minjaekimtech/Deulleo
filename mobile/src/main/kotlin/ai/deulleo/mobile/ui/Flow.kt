@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,41 +77,36 @@ fun HandoffScreen(state: MobileState, onBack: () -> Unit, onDone: () -> Unit) {
         Text("그랜저로 보냈어요", color = DColor.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 22.dp))
         Text("차에 타면 들러가 먼저 이렇게 말해요.", color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
 
-        // 차량 디스플레이 미리보기
-        val shape = RoundedCornerShape(14.dp)
+        // 차량 디스플레이(가로 화면) 미리보기: 브리핑 앞부분과 말하는 중 표시
+        val shape = RoundedCornerShape(12.dp)
         Column(
-            Modifier.padding(top = 20.dp).fillMaxWidth().clip(shape).background(DColor.Surf).border(1.dp, DColor.Line, shape).padding(18.dp),
+            Modifier.padding(top = 20.dp).fillMaxWidth().aspectRatio(16f / 9f).clip(shape).background(Color.Black)
+                .border(1.dp, DColor.Line, shape).padding(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("차량 화면 · 탑승 브리핑", color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text("P", color = DColor.Sub, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("들러 · 탑승 브리핑", color = DColor.Sub, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text("정차 중(P)", color = DColor.Sub, fontSize = 11.sp)
             }
-            Text(state.briefing, color = DColor.Text, fontSize = 15.sp, lineHeight = 23.sp, modifier = Modifier.padding(top = 10.dp))
-            Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("\"응\" 이라고 답하면 안내 시작", color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                Text(
-                    "출발", color = DColor.Ink, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(DColor.Text).padding(horizontal = 18.dp, vertical = 8.dp),
-                )
+            val firstTwo = state.briefing.split(". ").take(3).joinToString(". ").let { if (it.endsWith(".") || it.endsWith("?")) it else "$it." }
+            Text(firstTwo, color = DColor.Text, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(top = 8.dp).weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // 말하는 중 표시(음성 파형)
+                Row(Modifier.height(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf(6, 12, 18, 9, 15, 7, 13, 5).forEach { h ->
+                        Box(Modifier.padding(end = 3.dp).width(2.5.dp).height(h.dp).background(DColor.Acc, RoundedCornerShape(2.dp)))
+                    }
+                }
+                Text("\"응\"이라고 답하면 안내를 시작해요", color = DColor.Sub, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
             }
         }
 
-        Step("1", "시동을 걸면", "기어가 P일 때 브리핑이 자동으로 시작돼요.")
-        Step("2", "달리는 동안", "화면에는 다음 목적지, 도착 시각, 주차만 크게 보여요.")
-        Step("3", "바꾸고 싶을 때", "\"케이크도 사야 해\", \"꽃집은 빼 줘\"처럼 말하면 돼요.")
+        Text(
+            "달리는 동안에는 다음 목적지와 도착 시각만 크게 보이고, 바꿀 일이 생기면 \"케이크도 사야 해\"처럼 말하면 돼요.",
+            color = DColor.Sub, fontSize = 13.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 18.dp),
+        )
 
         Spacer(Modifier.padding(top = 24.dp))
         PrimaryButton("확인", Modifier.fillMaxWidth(), onDone)
     }
 }
 
-@Composable
-private fun Step(no: String, title: String, body: String) {
-    Row(Modifier.padding(top = 18.dp)) {
-        NumberDot(no)
-        Column(Modifier.padding(start = 12.dp)) {
-            Text(title, color = DColor.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text(body, color = DColor.Sub, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 2.dp))
-        }
-    }
-}

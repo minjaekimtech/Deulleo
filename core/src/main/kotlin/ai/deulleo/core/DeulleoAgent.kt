@@ -173,9 +173,20 @@ class DeulleoAgent(
         val neighbor = errands.firstOrNull {
             it.id != moved.id && HaversineEstimator.haversineKm(it.place.location, alt.location) < 0.3
         }
-        return if (neighbor != null) "${Josa.eunNeun(moved.title)} ${neighbor.place.name} 옆 ${Josa.euroRo(alt.name)} 바꿨어요. 주차는 한 번이면 돼요."
-        else "${Josa.eunNeun(moved.title)} 더 가까운 ${Josa.euroRo(alt.name)} 바꿨어요."
+        return if (neighbor != null) "${Josa.eunNeun(moved.title)} ${neighbor.place.name} 옆 ${Josa.euroRo(alt.name)} 옮겼어요. 주차는 한 번이면 돼요."
+        else "${Josa.eunNeun(moved.title)} 더 가까운 ${Josa.euroRo(alt.name)} 옮겼어요."
     }
+
+    /** 가게를 [newPlace]로 바꾸면 계획이 어떻게 되는지 미리 봅니다(실제로 바꾸지는 않음). */
+    fun previewSwap(errandId: String, newPlace: Place, now: MinuteOfDay, here: GeoPoint): Plan? {
+        val i = errands.indexOfFirst { it.id == errandId }
+        if (i < 0) return null
+        return planner.plan(here, now, home, errands.toMutableList().also { it[i] = it[i].copy(place = newPlace) }, homeBy)
+    }
+
+    /** [place]에 [stayMinutes]분 들르면 계획이 어떻게 되는지 미리 봅니다(실제로 넣지는 않음). */
+    fun previewVisit(place: Place, stayMinutes: Int, now: MinuteOfDay, here: GeoPoint): Plan? =
+        planner.plan(here, now, home, errands + Errand("preview", place.name, ErrandKind.FLEXIBLE, place, stayMinutes), homeBy)
 
     /** 같은 볼일을 다른 가게에서 하도록 바꿉니다. */
     fun swapPlace(errandId: String, newPlace: Place, now: MinuteOfDay, here: GeoPoint): AgentReply {

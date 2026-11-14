@@ -56,7 +56,7 @@ fun RouteMap(home: GeoPoint, stops: List<StopRow>, modifier: Modifier = Modifier
         val lngScale = cos(Math.toRadians(home.lat))
         val minLat = focus.minOf { it.lat }; val maxLat = focus.maxOf { it.lat }
         val minLng = focus.minOf { it.lng }; val maxLng = focus.maxOf { it.lng }
-        val pad = if (showLabels) 56.dp.toPx() else 28.dp.toPx()
+        val pad = if (showLabels) 56.dp.toPx() else 20.dp.toPx()
         val spanLat = (maxLat - minLat).coerceAtLeast(0.006)
         val spanLng = ((maxLng - minLng) * lngScale).coerceAtLeast(0.006)
         val scale = minOf((size.height - 2 * pad) / spanLat, (size.width - 2 * pad) / spanLng).toFloat()
@@ -112,13 +112,24 @@ fun RouteMap(home: GeoPoint, stops: List<StopRow>, modifier: Modifier = Modifier
         drawRoundRect(DColor.Text, Offset(h.x - hs, h.y - hs), Size(2 * hs, 2 * hs), CornerRadius(5.dp.toPx()))
         centered(measurer, "집", h, TextStyle(color = DColor.Ink, fontSize = 11.sp, fontWeight = FontWeight.Bold))
 
-        // 번호 핀과 이름
+        // 번호 핀과 이름. 화면에서 가까이 붙은 핀은 "3·4"처럼 하나로 묶어 겹치지 않게 합니다.
+        val groups = ArrayList<Pair<Offset, MutableList<Int>>>()
         stops.forEachIndexed { i, stop ->
             val c = project(stop.location)
-            drawCircle(DColor.Ink, 13.dp.toPx(), c)
-            drawCircle(DColor.Text, 11.dp.toPx(), c)
-            centered(measurer, (i + 1).toString(), c, TextStyle(color = DColor.Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold))
-            if (showLabels) label(measurer, "${stop.placeName}  ${stop.start}", c, above = i % 2 == 1)
+            val hit = groups.indexOfFirst { (it.first - c).getDistance() < 26.dp.toPx() }
+            if (hit >= 0) groups[hit].second += i else groups += c to mutableListOf(i)
+        }
+        groups.forEachIndexed { g, (c, members) ->
+            val text = members.joinToString("·") { (it + 1).toString() }
+            val half = if (members.size > 1) 9.dp.toPx() * members.size else 0f
+            val r = 11.dp.toPx()
+            drawRoundRect(DColor.Ink, Offset(c.x - half - r - 2.dp.toPx(), c.y - r - 2.dp.toPx()), Size(2 * (half + r) + 4.dp.toPx(), 2 * r + 4.dp.toPx()), CornerRadius(r + 2.dp.toPx()))
+            drawRoundRect(DColor.Text, Offset(c.x - half - r, c.y - r), Size(2 * (half + r), 2 * r), CornerRadius(r))
+            centered(measurer, text, c, TextStyle(color = DColor.Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+            if (showLabels) {
+                val name = members.joinToString(" · ") { stops[it].placeName }
+                label(measurer, "$name  ${stops[members.first()].start}", c, half + r, preferLeft = g % 2 == 1)
+            }
         }
     }
 }
@@ -129,13 +140,22 @@ private fun DrawScope.centered(measurer: TextMeasurer, text: String, at: Offset,
 }
 
 /** 핀 옆에 붙는 이름표. 화면 밖으로 나가지 않게 좌우를 고르고, 이웃 핀과 겹치지 않게 위아래를 번갈아 둡니다. */
-private fun DrawScope.label(measurer: TextMeasurer, text: String, pin: Offset, above: Boolean) {
+private fun DrawScope.label(measurer: TextMeasurer, text: String, pin: Offset, pinHalfWidth: Float, preferLeft: Boolean) {
     val layout = measurer.measure(text, TextStyle(color = DColor.Text, fontSize = 11.sp, fontWeight = FontWeight.Medium))
     val padX = 7.dp.toPx(); val padY = 4.dp.toPx()
     val w = layout.size.width + 2 * padX; val hgt = layout.size.height + 2 * padY
-    var x = pin.x + 16.dp.toPx()
-    if (x + w > size.width - 6.dp.toPx()) x = pin.x - 16.dp.toPx() - w
-    val y = if (above) pin.y - hgt - 6.dp.toPx() else pin.y + 6.dp.toPx()
+    val gap = pinHalfWidth + 6.dp.toPx()
+    val right = pin.x + gap; val left = pin.x - gap - w
+    val edge = 6.dp.toPx()
+    val x = when {
+        preferLeft && left >= edge -> left
+        right + w <= size.width - edge -> right
+        left >= edge -> left
+        else -> (size.width - w - edge).coerceAtLeast(edge)
+    }
+    // 좌우에 둘 자리가 없어 핀 위를 덮게 되면 핀 아래로 내립니다.
+    val overlapsPin = x < pin.x + pinHalfWidth && x + w > pin.x - pinHalfWidth
+    val y = if (overlapsPin) pin.y + 16.dp.toPx() else pin.y - hgt / 2
     drawRoundRect(DColor.Ink.copy(alpha = 0.88f), Offset(x, y), Size(w, hgt), CornerRadius(6.dp.toPx()))
     drawText(layout, topLeft = Offset(x + padX, y + padY))
 }

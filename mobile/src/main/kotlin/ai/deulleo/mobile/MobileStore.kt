@@ -46,7 +46,11 @@ data class StopRow(
 /** 차량이 알려 준 상태(시연: 타이어 공기압) */
 data class VehicleNotice(val title: String, val detail: String, val included: Boolean)
 
-data class Alternative(val placeId: String, val name: String, val detail: String)
+/** 다른 가게 후보. [cost]는 바꿨을 때 귀가 시각이 어떻게 되는지입니다. */
+data class Alternative(val placeId: String, val name: String, val detail: String, val cost: String)
+
+/** 계획이 바뀐 직후의 알림: 무엇이 달라졌는지(title)와 왜(body) */
+data class Notice(val title: String, val body: String)
 
 data class Recommendation(val item: String, val title: String, val detail: String)
 
@@ -61,7 +65,11 @@ data class MobileState(
     val homeLegMinutes: Int = 0,
     val homeArrive: String = "",
     /** 계획이 바뀐 뒤 무엇이 달라졌는지 */
-    val notice: String = "",
+    val notice: Notice? = null,
+    /** 출발까지 남은 시간(오늘만) */
+    val nowLabel: String = "",
+    /** 귀가 뒤에 이어지는 오늘 일정 */
+    val laterToday: Pair<String, String>? = null,
     val vehicle: VehicleNotice? = null,
     val recommendation: Recommendation? = null,
     val detailId: String? = null,
@@ -71,8 +79,8 @@ data class MobileState(
     val recommendOn: Boolean = true,
     val carConnected: Boolean = true,
     val tastes: Set<String> = setOf("말차", "베이커리"),
-    val homeAddress: String = "서울 광진구 ○○로 12",
-    val workAddress: String = "서울 성동구 ○○길 45",
+    val homeAddress: String = "서울 광진구 자양로12길 8",
+    val workAddress: String = "서울 성동구 성수이로 51",
     val favorites: List<String> = listOf("들러헤어 성수점", "푸른수학학원", "자양 마트"),
     val home: GeoPoint = SampleDay.home,
 ) {
@@ -129,7 +137,8 @@ class MobileStore {
             catalog.search(errand.place.category, errand.place.location, 4)
                 .filter { it.id != errand.place.id }
                 .map { p ->
-                    Alternative(p.id, p.name, listOfNotNull(hours(p.opensAt, p.closesAt), p.rating?.let { "평점 $it" }).joinToString(" · "))
+                    val detail = listOfNotNull(hours(p.opensAt, p.closesAt), p.rating?.let { "평점 $it" }).joinToString(" · ")
+                    Alternative(p.id, p.name, detail, cost(agent.previewSwap(id, p, startAt, here)))
                 }
         } else emptyList()
         state = state.copy(overlay = Overlay.DETAIL, detailId = id, alternatives = alts)
@@ -207,7 +216,7 @@ class MobileStore {
     // ---- 설정 ----
     fun setRecommendOn(on: Boolean) {
         state = state.copy(recommendOn = on)
-        publish(state.notice, null)
+        publish(null, null)
     }
 
     fun setCarConnected(on: Boolean) {
@@ -217,7 +226,7 @@ class MobileStore {
 
     fun toggleTaste(t: String) {
         state = state.copy(tastes = if (t in state.tastes) state.tastes - t else state.tastes + t)
-        publish(state.notice, null)
+        publish(null, null)
     }
 
     // ---- 내부 ----
@@ -251,10 +260,10 @@ class MobileStore {
         if (slack >= 5) briefing = planFrom(base + slack / 5 * 5)
 
         state = state.copy(day = day, dateLabel = "11월 ${day}일 ${weekdayOf(day)}요일", briefing = briefing)
-        publish("", null)
+        publish(null, null)
     }
 
-    private fun publish(notice: String, changedId: String?) {
+    private fun publish(notice: Notice?, changedId: String?) {
         val plan = agent.plan
         val stops = plan?.stops.orEmpty()
         var prev = here
@@ -289,14 +298,14 @@ class MobileStore {
         val first = stops.firstOrNull { it.errand.kind == ErrandKind.FIXED || it.errand.kind == ErrandKind.PICKUP }
         val sub = when {
             rows.isEmpty() -> ""
-            first != null -> "${clock(first.errand.fixedStart!!)} ${first.errand.title}에 맞췄어요"
+            first != null -> "${clock(first.errand.fixedStart!!)} ${first.errand.title}${if (first.errand.kind == ErrandKind.FIXED) " 예약" else ""} 기준"
             else -> "${rows.size}곳을 들러요"
         }
         val careInPlan = stops.any { it.errand.id == CARE_ID }
         val vehicle = if (state.carConnected && state.day == TODAY) {
             VehicleNotice(
                 title = "뒤 왼쪽 타이어 29psi",
-                detail = if (careInPlan) "권장 35psi · 오늘 아침 차가 감지해서 가는 길 정비소를 넣었어요"
+                detail = if (careInPlan) "권장 35psi · 차가 감지해 가는 길 정비소를 넣었어요"
                 else "권장 35psi · 오늘 점검은 뺐어요",
                 included = careInPlan,
             )
@@ -309,6 +318,9 @@ class MobileStore {
             homeLegMinutes = if (stops.isEmpty()) 0 else travel.minutes(prev, SampleDay.home),
             homeArrive = plan?.let { clock(it.homeArriveAt) } ?: "",
             notice = notice,
+            // 시연용 현재 시각: 출발 32분 전
+            nowLabel = if (state.day == TODAY && rows.isNotEmpty()) "지금 ${clock(startAt - 32)} · 32분 뒤 출발" else "",
+            laterToday = if (state.day == TODAY) "18:30" to "엄마 생신 저녁" else null,
             vehicle = vehicle,
             recommendation = recommendation(rows),
         )
@@ -321,13 +333,15 @@ class MobileStore {
         val next = errands.getOrNull(i + 1)
         // 한 번 주차로 묶이는 것은 둘 다 가게일 때만입니다(정비소·픽업은 제외).
         val shop = { o: Errand? -> o != null && o.kind != ErrandKind.VEHICLE_CARE && o.kind != ErrandKind.PICKUP }
-        val neighbor = shop(e) && listOf(errands.getOrNull(i - 1), next).any { shop(it) && near(it) }
+        val neighbor = if (shop(e)) listOf(errands.getOrNull(i - 1), next).firstOrNull { shop(it) && near(it) } else null
         val lastShopping = errands.indexOfLast { it.kind == ErrandKind.FLEXIBLE } == i
         return when {
             e.kind == ErrandKind.VEHICLE_CARE -> "예약 전 빈 시간에 넣었어요"
-            e.kind == ErrandKind.PICKUP -> e.waitSpot?.let { "일찍 도착하면 도로 대신 ${it.name}에서 기다려요" }
+            e.kind == ErrandKind.PICKUP -> e.waitSpot?.let {
+                "일찍 도착하면 도로 대신 ${it.name}에서 기다려요. ${e.companion ?: "상대"}에게는 도착 시각을 알려요"
+            }
             e.kind == ErrandKind.FLEXIBLE && next?.kind == ErrandKind.PICKUP && near(next) -> "하원을 기다리는 동안 끝낼 수 있어요"
-            neighbor -> "옆 일정과 한 번 주차로 끝나요"
+            neighbor != null -> "${neighbor.title} 바로 옆이라 주차는 한 번이에요"
             e.perishable && lastShopping -> "차에 오래 두지 않게 마지막에 들러요"
             e.kind == ErrandKind.FIXED && slack >= 5 -> "${slack}분 일찍 도착해요"
             e.place.closesAt - endAt in 0..45 -> "${clock(e.place.closesAt)} 마감 전에 도착해요"
@@ -340,18 +354,27 @@ class MobileStore {
         val hasCafe = rows.any { it.category == "카페" }
         if (!state.recommendOn || recoDismissed || "말차" !in state.tastes || hasCafe || rows.isEmpty() || state.day != TODAY) return null
         val cafe = catalog.search("말차", SampleDay.home, 1).firstOrNull() ?: return null
-        return Recommendation("말차", "가는 길에 ${cafe.name}", "말차 라떼 · 평점 ${cafe.rating ?: "-"}")
+        val extra = cost(agent.previewVisit(cafe, 10, startAt, here))
+        return Recommendation("말차", "가는 길에 ${cafe.name}", listOf("말차 라떼 · 평점 ${cafe.rating ?: "-"}", extra).filter { it.isNotBlank() }.joinToString(" · "))
     }
 
-    /** 계획이 바뀌었을 때 귀가 시각이 어떻게 달라졌는지 덧붙입니다. */
-    private fun diff(before: Plan?, after: Plan?, speech: String): String {
+    /** 계획이 바뀌었을 때: 귀가 시각이 어떻게 달라졌는지를 제목으로, 에이전트의 설명을 본문으로. */
+    private fun diff(before: Plan?, after: Plan?, speech: String): Notice? {
         val a = before?.homeArriveAt; val b = after?.homeArriveAt
-        val change = if (a != null && b != null && a != b) {
+        val body = speech.substringBefore(" 집 도착").trim()
+        val title = if (a != null && b != null && a != b) {
             val d = b - a
             "집 도착 ${clock(a)} → ${clock(b)} (${if (d > 0) "+" else ""}${d}분)"
-        } else null
-        val head = speech.substringBefore(" 집 도착").trim()
-        return listOfNotNull(head.takeIf { it.isNotBlank() }, change).joinToString(" ")
+        } else "집 도착 시각은 그대로예요"
+        return if (body.isBlank() && a == b) null else Notice(title, body)
+    }
+
+    /** 미리 본 계획이 지금 계획보다 얼마나 늦어지는지: "+12분 · 집 17:10" */
+    private fun cost(preview: Plan?): String {
+        val now = agent.plan ?: return ""
+        preview ?: return "시간이 맞지 않아요"
+        val d = preview.homeArriveAt - now.homeArriveAt
+        return "${if (d >= 0) "+" else ""}${d}분 · 집 ${clock(preview.homeArriveAt)}"
     }
 
     private fun hours(open: Int, close: Int): String =

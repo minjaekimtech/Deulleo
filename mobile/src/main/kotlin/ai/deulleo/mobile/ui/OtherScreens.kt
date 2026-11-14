@@ -40,9 +40,12 @@ import androidx.compose.ui.unit.sp
 
 /** 시연용 달력 내용: 날짜별로 들어 있는 일정 (시각, 이름, 출처) */
 private fun eventsOf(day: Int): List<Triple<String, String, String>> = when {
-    day == TODAY -> listOf(Triple("15:00", "미용실", "캘린더"), Triple("할 일", "엄마 생신 꽃 사기", "메모"))
+    day == TODAY -> listOf(
+        Triple("15:00", "미용실", "캘린더"),
+        Triple("18:30", "엄마 생신 저녁", "캘린더"),
+        Triple("할 일", "엄마 생신 꽃 사기", "메모"),
+    )
     day in PICKUP_DAYS -> listOf(Triple("16:30", "지우 학원 하원", "시간표 · 매주 화·목"), Triple("할 일", "장보기", "메모"))
-    day == 21 -> listOf(Triple("11:00", "엄마 생신 모임", "캘린더"))
     else -> emptyList()
 }
 
@@ -130,7 +133,13 @@ fun ProfileScreen(
         Divider()
         InfoRow("집", state.homeAddress)
         InfoRow("회사", state.workAddress)
-        state.favorites.forEach { InfoRow("단골", it) }
+
+        SectionLabel("단골")
+        Divider()
+        state.favorites.forEach { name ->
+            Text(name, color = DColor.Text, fontSize = 15.sp, modifier = Modifier.padding(vertical = 13.dp))
+            Divider()
+        }
 
         SectionLabel("취향")
         Text("가는 길에 들를 만한 곳을 고를 때 참고해요.", color = DColor.Sub, fontSize = 13.sp, modifier = Modifier.padding(bottom = 10.dp))

@@ -26,7 +26,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -70,7 +74,7 @@ fun DetailSheet(row: StopRow, alternatives: List<Alternative>, onSwap: (String) 
     Divider()
     Field("시간", "${row.start}–${row.end}")
     if (row.address.isNotBlank()) Field("주소", row.address)
-    Field("영업", row.hours)
+    Field("영업시간", row.hours)
     row.parking?.let { Field("주차", it + if (row.walkMinutes > 0) " · 도보 ${row.walkMinutes}분" else "") }
     row.reason?.let { Field("이유", it) }
 
@@ -85,6 +89,7 @@ fun DetailSheet(row: StopRow, alternatives: List<Alternative>, onSwap: (String) 
                     Text(alt.name, color = DColor.Text, fontSize = 15.sp)
                     Text(alt.detail, color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
                 }
+                Text(alt.cost, color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.padding(end = 12.dp))
                 Text("바꾸기", color = DColor.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
             Divider()
@@ -118,9 +123,9 @@ fun AddSheet(onAdd: (String) -> Unit, onScreenshot: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text("스크린샷에서 가져오기", color = DColor.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text("예약 문자·카톡을 찍어 두면 일정으로 바꿔요", color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            Text("예약 문자·카톡을 캡처해 두면 일정으로 바꿔요", color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        Text("열기", color = DColor.Text, fontSize = 13.sp)
+        Text("불러오기", color = DColor.Text, fontSize = 13.sp)
     }
 }
 
@@ -136,13 +141,31 @@ fun ScreenshotSheet(onConfirm: () -> Unit, startRecognized: Boolean = false) {
     }
     SheetTitle("스크린샷에서 가져오기", "최근 스크린샷 1장")
 
-    // 샘플 예약 문자
-    val shape = RoundedCornerShape(10.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(DColor.Bg).border(1.dp, DColor.Line, shape).padding(14.dp)) {
-        Text("모퉁이 베이커리", color = DColor.Sub, fontSize = 12.sp)
+    // 샘플 스크린샷: 문자 앱 화면처럼 그리고, 읽어 낸 부분에 밑줄을 긋습니다.
+    val frame = RoundedCornerShape(12.dp)
+    Column(Modifier.fillMaxWidth().clip(frame).background(DColor.Bg).border(1.dp, DColor.Line, frame).padding(14.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("모퉁이 베이커리", color = DColor.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("문자 · 11월 12일 오후 2:03", color = DColor.Sub, fontSize = 11.sp)
+        }
+        val mark = SpanStyle(color = DColor.Acc, textDecoration = TextDecoration.Underline)
+        val body = buildAnnotatedString {
+            append("[예약 확정] ")
+            if (recognized) withStyle(mark) { append("홀케이크 1호") } else append("홀케이크 1호")
+            append("\n")
+            if (recognized) withStyle(mark) { append("11월 14일(토) 오후 5:00") } else append("11월 14일(토) 오후 5:00")
+            append(" 픽업\n")
+            if (recognized) withStyle(mark) { append("모퉁이 베이커리 자양점") } else append("모퉁이 베이커리 자양점")
+            append("\n변경은 하루 전까지 가능합니다.")
+        }
         Text(
-            "[예약 확정] 홀케이크 1호\n11월 14일(토) 오후 5:00 픽업\n서울 광진구 자양로\n변경은 하루 전까지 가능합니다.",
-            color = DColor.Text, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(top = 6.dp),
+            body, color = DColor.Text, fontSize = 14.sp, lineHeight = 21.sp,
+            modifier = Modifier
+                .padding(top = 10.dp, end = 36.dp)
+                .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp))
+                .background(DColor.Surf)
+                .border(1.dp, DColor.Line, RoundedCornerShape(topStart = 4.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
         )
     }
 
