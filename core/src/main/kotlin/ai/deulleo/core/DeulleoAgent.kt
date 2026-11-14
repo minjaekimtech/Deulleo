@@ -132,6 +132,18 @@ class DeulleoAgent(
         return done
     }
 
+    /** 화면에서 품목을 직접 추가합니다(음성 "…도 사야 해"와 같은 동작). */
+    fun addItem(item: String, now: MinuteOfDay, here: GeoPoint): AgentReply = addErrand(item.trim(), now, here)
+
+    /** 화면에서 일정을 지웁니다. */
+    fun removeById(id: String, now: MinuteOfDay, here: GeoPoint): AgentReply {
+        val removed = errands.filter { it.id == id }
+        if (removed.isEmpty()) return AgentReply("", plan)
+        errands.removeAll(removed)
+        val p = replan(now, here)
+        return AgentReply("${Josa.eulReul(removed.first().title)} 뺐어요.", p)
+    }
+
     // ---- 만남(픽업) ----
 
     /**

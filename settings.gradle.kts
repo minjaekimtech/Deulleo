@@ -21,5 +21,6 @@ rootProject.name = "deulleo"
 include(":core")
 // 순수 Kotlin 모듈만 빌드하려면: ./gradlew -Pcore.only :core:test
 if (!providers.gradleProperty("core.only").isPresent) {
-    include(":app")
+    include(":app")     // 차량 앱 (Pleos Connect)
+    include(":mobile")  // 폰 앱
 }
