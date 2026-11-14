@@ -9,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -19,10 +18,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
 
-private val Land = Color(0xFF2A3552)
-private val Block = Color(0xFF313D5E)
-private val MinorRoad = Color(0xFF3E4A6C)
-private val MajorRoad = Color(0xFF4D5A80)
+private val Land = Color(0xFF20252C)
+private val Block = Color(0xFF242A32)
+private val MinorRoad = Color(0xFF2B313A)
+private val MajorRoad = Color(0xFF363D48)
 
 /**
  * 시연용 동선 지도.
@@ -50,7 +49,7 @@ fun RouteMap(start: GeoPoint, stops: List<StopCard>, modifier: Modifier = Modifi
 
         drawBlocksAndMinorRoads()
         // 각 지점을 지나는 큰 도로
-        val major = 11.dp.toPx()
+        val major = 8.dp.toPx()
         pts.forEach { p ->
             drawLine(MajorRoad, Offset(0f, p.y), Offset(size.width, p.y), major, StrokeCap.Round)
             drawLine(MajorRoad, Offset(p.x, 0f), Offset(p.x, size.height), major, StrokeCap.Round)
@@ -65,22 +64,21 @@ fun RouteMap(start: GeoPoint, stops: List<StopCard>, modifier: Modifier = Modifi
                 lineTo(loop[i].x, loop[i].y)
             }
         }
-        val brush = Brush.linearGradient(listOf(DColor.Ice, DColor.Lav), Offset(0f, size.height), Offset(size.width, 0f))
-        drawPath(route, brush, alpha = 0.28f, style = Stroke(16.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-        drawPath(route, brush, style = Stroke(5.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        // 색이 있는 유일한 요소: 경로 선
+        drawPath(route, DColor.Ink, style = Stroke(9.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawPath(route, DColor.Acc, style = Stroke(5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
 
         // 집(출발·도착)
-        drawCircle(DColor.Ice.copy(alpha = 0.3f), 14.dp.toPx(), pts.first())
-        drawCircle(Color.White, 9.dp.toPx(), pts.first())
-        drawCircle(DColor.Ice, 6.dp.toPx(), pts.first())
+        drawCircle(DColor.Text, 9.dp.toPx(), pts.first())
+        drawCircle(DColor.Acc, 6.dp.toPx(), pts.first())
         if (showLabels) drawLabel("집", pts.first(), 11.dp.toPx())
 
         // 번호 핀
         stops.forEachIndexed { i, stop ->
             val c = pts[i + 1]
-            drawCircle(Color.White, 13.dp.toPx(), c)
-            drawCircle(DColor.Lav, 11.dp.toPx(), c)
-            drawCentered((i + 1).toString(), c, 13.dp.toPx(), android.graphics.Color.rgb(11, 15, 24))
+            drawCircle(DColor.Ink, 13.dp.toPx(), c)
+            drawCircle(DColor.Text, 11.dp.toPx(), c)
+            drawCentered((i + 1).toString(), c, 12.dp.toPx(), android.graphics.Color.rgb(20, 23, 28))
             if (showLabels) drawLabel("${stop.title.take(8)} ${stop.time}", c, 11.dp.toPx())
         }
     }

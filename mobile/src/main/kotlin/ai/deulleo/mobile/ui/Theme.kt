@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,113 +20,85 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** 공모전 포스터의 밤하늘·빛줄기 색감을 한 단계 밝게 옮긴 팔레트. */
+/**
+ * 절제된 무채색 팔레트. 색이 있는 곳은 동선(경로 선)을 그리는 [Acc] 하나뿐입니다.
+ * 그라데이션·글로우·이모지를 쓰지 않고, 카드 대신 얇은 구분선으로 정보를 나눕니다.
+ */
 object DColor {
-    val Bg0 = Color(0xFF111727)
-    val Bg1 = Color(0xFF1E2740)
-    val Card = Color(0xFF232C45)
-    val Sheet = Color(0xFF222B44)
-    val Line = Color(0x42AAB0CD)
-    val Sub = Color(0xFFA3A9C2)
-    val Text = Color(0xFFF2F4FA)
-    val Lav = Color(0xFFA9A4FF)
-    val Ice = Color(0xFF8FD3FF)
-    val Ink = Color(0xFF0B0F18)
-    val Warn = Color(0xFFFFB4B4)
+    val Bg = Color(0xFF14171C)
+    val Surf = Color(0xFF1C2026)
+    val Line = Color(0xFF2C313A)
+    val Sub = Color(0xFF8B929E)
+    val Text = Color(0xFFF4F5F7)
+    val Acc = Color(0xFF7CC4E8)
+    val Warn = Color(0xFFE8A87C)
+    val Ink = Color(0xFF14171C)
 }
 
-val AccentBrush = Brush.linearGradient(listOf(DColor.Lav, DColor.Ice))
-val BackgroundBrush = Brush.verticalGradient(listOf(DColor.Bg0, DColor.Bg1))
-
+/** 화면 맨 위: 왼쪽 작은 라벨(날짜·화면 이름), 오른쪽 메뉴 */
 @Composable
-fun ScreenHeader(title: String, subtitle: String, onMenu: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = DColor.Text, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
-            Text(subtitle, color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
-        }
-        Box(
-            Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(DColor.Card)
-                .border(1.dp, DColor.Line, RoundedCornerShape(14.dp))
-                .clickable(onClick = onMenu),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Filled.Menu, contentDescription = "메뉴", tint = DColor.Text) }
+fun TopBar(label: String, onMenu: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = DColor.Sub, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Icon(
+            Icons.Filled.Menu, contentDescription = "메뉴", tint = DColor.Text,
+            modifier = Modifier.size(24.dp).clickable(onClick = onMenu),
+        )
     }
 }
 
 @Composable
 fun SectionLabel(text: String) {
-    Text(
-        text, color = DColor.Sub, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 22.dp, bottom = 10.dp),
-    )
+    Text(text, color = DColor.Sub, fontSize = 12.sp, modifier = Modifier.padding(top = 26.dp, bottom = 4.dp))
 }
 
 @Composable
-fun DCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(DColor.Card)
-            .border(1.dp, DColor.Line, RoundedCornerShape(18.dp))
-            .padding(horizontal = 14.dp, vertical = 13.dp),
-        content = content,
-    )
+fun Divider() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(DColor.Line))
 }
 
-/** 선택형 칩. 선택되면 포스터의 빛줄기 그라데이션으로 채웁니다. */
+/** 선택형 칩: 선택되면 테두리와 글자가 밝아집니다. */
 @Composable
 fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(50)
-    val base = Modifier.clip(shape)
-    val styled = if (selected) base.background(AccentBrush) else base.border(1.dp, DColor.Line, shape)
+    val shape = RoundedCornerShape(8.dp)
     Text(
         text,
-        color = if (selected) DColor.Ink else DColor.Text,
+        color = if (selected) DColor.Text else DColor.Sub,
         fontSize = 13.sp,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        modifier = styled.clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 7.dp),
+        modifier = Modifier
+            .clip(shape)
+            .border(1.dp, if (selected) DColor.Text else DColor.Line, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     )
 }
 
 @Composable
-fun Tag(text: String, color: Color) {
-    val shape = RoundedCornerShape(50)
-    Text(
-        text, color = color, fontSize = 11.sp,
-        modifier = Modifier.border(1.dp, color.copy(alpha = 0.55f), shape).padding(horizontal = 8.dp, vertical = 2.dp),
-    )
-}
-
-@Composable
-fun AccentButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun PrimaryButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier
             .height(50.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(AccentBrush)
+            .clip(RoundedCornerShape(10.dp))
+            .background(DColor.Text)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Text(text, color = DColor.Ink, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold) }
+    ) { Text(text, color = DColor.Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
 }
 
 @Composable
 fun NumberDot(label: String) {
     Box(
-        Modifier.size(24.dp).clip(CircleShape).background(AccentBrush),
+        Modifier.size(22.dp).clip(CircleShape).background(DColor.Text),
         contentAlignment = Alignment.Center,
-    ) { Text(label, color = DColor.Ink, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold) }
+    ) { Text(label, color = DColor.Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
 }
 
 @Composable
-fun VSpace(h: Int) = Spacer(Modifier.height(h.dp))
+fun VSpace(h: Int) {
+    Spacer(Modifier.height(h.dp))
+}

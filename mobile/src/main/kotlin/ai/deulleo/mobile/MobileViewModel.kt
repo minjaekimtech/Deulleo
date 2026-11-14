@@ -39,6 +39,7 @@ data class MobileState(
     val showMenu: Boolean = false,
     val cards: List<StopCard> = emptyList(),
     val homeArrive: String = "",
+    val firstDepart: String = "",
     val totalDriveMinutes: Int = 0,
     val message: String = "",
     val recommendation: Recommendation? = null,
@@ -150,18 +151,16 @@ class MobileViewModel : ViewModel() {
             drive += leg
             prev = e.place.location
             val begin = stop.departAt - e.stayMinutes
-            val parking = e.place.parking?.let { pk ->
-                "🅿 ${pk.name}" + if (pk.note.isNotBlank()) " · ${pk.note}" else ""
-            }
+            val parking = e.place.parking?.takeIf { it.note.isNotBlank() }?.let { pk -> "${pk.name} · ${pk.note}" }
             val detail = when (e.kind) {
-                ErrandKind.VEHICLE_CARE -> "${e.place.name} · 차가 추가했어요"
+                ErrandKind.VEHICLE_CARE -> e.place.name
                 else -> listOfNotNull(e.place.name.takeIf { it != e.title }, parking).joinToString(" · ")
             }
             StopCard(e.id, clock(begin), e.title, detail, e.kind, leg, e.place.location)
         }
         drive += travel.minutes(prev, SampleDay.home)
         _state.update {
-            it.copy(cards = cards, homeArrive = clock(p.homeArriveAt), totalDriveMinutes = drive, message = message)
+            it.copy(cards = cards, homeArrive = clock(p.homeArriveAt), firstDepart = clock(now), totalDriveMinutes = drive, message = message)
         }
         refreshRecommendation()
     }
@@ -174,7 +173,7 @@ class MobileViewModel : ViewModel() {
         _state.update {
             it.copy(
                 recommendation = if (show && cafe != null) {
-                    Recommendation("말차", "가는 길에 말차 라떼 어때요?", "${cafe.name} · 평점 ${cafe.rating ?: "-"}")
+                    Recommendation("말차", "가는 길에 ${cafe.name}", "말차 라떼 · 평점 ${cafe.rating ?: "-"}")
                 } else null,
             )
         }
