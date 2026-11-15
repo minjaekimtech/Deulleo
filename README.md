@@ -140,7 +140,7 @@ Pleos Playground의 My Project 화면 기준으로 Vehicle State와 NaviHelper�
 | 항목 | 값 |
 |---|---|
 | Pleos Connect Emulator | v2.1.0 (API 34) |
-| 화면 규격 | _(제출 전 기재: AVD 설정의 해상도)_ 가로형·세로형(12.9인치) 모두 배치가 바뀌도록 구성 |
+| 화면 규격 | 가로형(14.6인치)과 세로형(12.9인치) 모두에서 배치가 바뀌도록 구성. 데스크톱 렌더링 1920×900, 1200×1600으로 확인 |
 | minSdk / targetSdk | 28 / 34 |
 | Pleos SDK | Vehicle 2.3.2, NaviHelper 3.0.5, SpeechToText 3.3.1, TextToSpeech 3.3.1, FusedLocation 1.1.3 |
 
@@ -158,7 +158,7 @@ release 서명 키(선택, `keystore.properties`): 없으면 디버그 키로 �
 Pleos 퍼미션은 Pleos App Market과 사전 협의·승인된 범위에서만 사용할 수 있습니다(이 앱은 조회 권한만 쓰고 차량 제어 권한은 쓰지 않습니다).
 
 ## APK 파일 위치
-`apk/성명_Deulleo_release.apk` _(제출 전 `assembleRelease` 결과물을 이 이름으로 복사)_
+`apk/` 폴더: 차량 앱 `팀명_Deulleo_release.apk`, 폰 앱 `팀명_Deulleo_mobile_release.apk`
 
 ## 테스트
 
