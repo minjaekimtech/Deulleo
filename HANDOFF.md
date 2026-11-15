@@ -15,7 +15,7 @@
 - `core/` 순수 Kotlin: 계획 엔진, 에이전트, 발화 해석(규칙 기반). 테스트 13개.
 - `mobile/` 폰 앱(Compose). 상태는 `MobileStore.kt`. 테스트 13개. 사용자의 PC에서 빌드·실행 확인됨(그 뒤 화면을 다시 고쳤고, 고친 뒤는 데스크톱 렌더링으로만 확인).
 - `app/` 차량 앱(Pleos SDK 5종 래퍼 `pleos/`, `MainViewModel.kt`, `CarState.kt`, `ui/Screens.kt`).
-- `tools/proposal/` 기획서 생성기. `python3 fill.py <출력.docx> <그림.png>` 형태(자세한 인자는 `fill.py` 참고). 내용은 `content.py`, 원본 양식은 `application.docx`.
+- `tools/proposal/` 기획서 원본(`content.py` 본문, `fill.py` 채우기 스크립트, `application.docx` 공식 양식, `figure.png` 그림 1). `fill.py`는 양식을 풀어 놓은 폴더에 대고 실행하는데, 압축만 푼 상태에서는 실패했습니다(문단 병합 전처리가 필요). 최종본은 이미 만들어 사용자에게 전달했으므로, 고칠 일이 생기면 전달된 docx의 `word/document.xml`을 직접 고치는 편이 빠릅니다.
 - `docs/` 화면 이미지(`mobile_ui.png`, `mobile_ui_2.png`, `car_ui.png`, `car_ui_portrait.png`).
 
 ## 확인된 것과 안 된 것
@@ -40,6 +40,9 @@
 
 ## 디자인 규칙 (사용자가 고른 안)
 절제된 단색 다크. 배경 #14171C, 글자 #F4F5F7, 강조색 #7CC4E8은 경로 선·도착 시각·바뀐 행에만, 경고색 #E8A87C는 차량 알림에만. 그라데이션, 글로우, 이모지 금지. 카드 대신 가는 구분선. 사용자는 "AI가 만든 티"를 싫어합니다.
+
+## 기획서 상태
+최종본(그림 1을 실제 앱 화면으로 교체, 10쪽)을 2026-11-15에 사용자에게 전달했습니다. 사용자가 직접 채울 것: 성명 등 개인정보, 서명, GitHub 링크와 최종 커밋 번호, 시연 영상 링크.
 
 ## 다음에 할 일 (우선순위 순)
 1. 사용자가 Pleos 에뮬레이터에서 `app`을 실행한 결과(빌드 오류, 시연 도구 맨 아래 "연결 상태" 줄)를 받아 고치기.

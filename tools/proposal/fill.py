@@ -30,7 +30,7 @@ def para(inner, before=0, after=40, ind=None, keep=False):
            f'<w:rPr>{LANG}</w:rPr>')
     return f'<w:p><w:pPr>{ppr}</w:pPr>{inner}</w:p>'
 
-IMG_W, IMG_H = 6126480, 3063240
+IMG_W, IMG_H = 6126480, 5557228
 def img_para():
     d = ('<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
          f'<wp:extent cx="{IMG_W}" cy="{IMG_H}"/><wp:docPr id="901" name="mockup"/>'
