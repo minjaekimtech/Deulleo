@@ -3,7 +3,7 @@
 > 사용자의 일정·동승자·차 상태를 읽고, 오늘의 이동을 그 사람 상황에 맞게 설계하는 차량용 음성 에이전트.
 > 폰에서 모은 일정과 볼일을 차에 타는 순간 가게·순서·시간·주차까지 정리된 경로로 바꾸고, 주행 중에는 말 한마디로 다시 짭니다.
 
-현대자동차그룹 차량용 앱 개발 공모전(Pleos Connect) 출품작의 프로토타입입니다.
+
 
 ### 차량 앱 화면
 ![들러 차량 앱](docs/car_ui.png)
@@ -158,7 +158,7 @@ release 서명 키(선택, `keystore.properties`): 없으면 디버그 키로 �
 Pleos 퍼미션은 Pleos App Market과 사전 협의·승인된 범위에서만 사용할 수 있습니다(이 앱은 조회 권한만 쓰고 차량 제어 권한은 쓰지 않습니다).
 
 ## APK 파일 위치
-`apk/` 폴더: 차량 앱 `팀명_Deulleo_release.apk`, 폰 앱 `팀명_Deulleo_mobile_release.apk`
+`apk/` 폴더: 차량 앱 `들러_Deulleo_release.apk`, 폰 앱 `들러_Deulleo_mobile_release.apk`
 
 ## 테스트
 
