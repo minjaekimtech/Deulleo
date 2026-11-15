@@ -14,6 +14,9 @@ import ai.pleos.playground.navi.helper.listener.NaviHelperEventListener
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
@@ -35,6 +38,10 @@ class PleosNavigator(context: Context) {
     private val _events = MutableSharedFlow<NaviEvent>(extraBufferCapacity = 8)
     val events: SharedFlow<NaviEvent> = _events.asSharedFlow()
 
+    private val _status = MutableStateFlow("연결 중")
+    /** 연결 점검용 */
+    val status: StateFlow<String> = _status.asStateFlow()
+
     @Volatile private var connected = false
     private var pending: (() -> Unit)? = null
 
@@ -47,6 +54,7 @@ class PleosNavigator(context: Context) {
         }
         override fun onError(errorCode: NaviErrorCode) {
             _events.tryEmit(NaviEvent.Error(errorCode.name))
+            _status.value = "오류: ${errorCode.name}"
         }
     }
 
@@ -55,13 +63,18 @@ class PleosNavigator(context: Context) {
             navi.initialize(
                 onConnected = {
                     connected = true
+                    _status.value = "연결됨"
                     navi.addListener(listener)
                     pending?.invoke(); pending = null
                 },
-                onFailed = { t -> Log.w(TAG, "NaviHelper 연결 실패: ${t.message}") },
+                onFailed = { t ->
+                    Log.w(TAG, "NaviHelper 연결 실패: ${t.message}")
+                    _status.value = "연결 실패: ${t.message ?: t.javaClass.simpleName}"
+                },
             )
         } catch (e: Exception) {
             Log.w(TAG, "NaviHelper 초기화 실패: ${e.message}")
+            _status.value = "초기화 실패: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 

@@ -4,15 +4,12 @@ import ai.deulleo.core.vehicle.GearState
 import ai.deulleo.core.vehicle.VehicleSnapshot
 import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.DoorArea
-import ai.pleos.playground.vehicle.api.model.area.SeatArea
 import ai.pleos.playground.vehicle.api.model.telltale.Telltales
 import ai.pleos.playground.vehicle.constant.area.DoorValue
-import ai.pleos.playground.vehicle.constant.area.SeatValue
 import ai.pleos.playground.vehicle.constant.control.OilLevelState
 import ai.pleos.playground.vehicle.constant.control.VehicleGear
 import ai.pleos.playground.vehicle.constant.telltale.TelltaleState
 import ai.pleos.playground.vehicle.constant.telltale.TelltaleType
-import ai.pleos.playground.vehicle.constant.unit.TemperatureUnit
 import ai.pleos.playground.vehicle.listener.DoorPositionListener
 import ai.pleos.playground.vehicle.listener.EvBatteryStateOfChargeListener
 import ai.pleos.playground.vehicle.listener.FuelPercentListener
@@ -42,11 +39,17 @@ class PleosVehicleSource(context: Context) {
     private val _state = MutableStateFlow(VehicleSnapshot())
     val state: StateFlow<VehicleSnapshot> = _state.asStateFlow()
 
+    private val _status = MutableStateFlow("신호 기다리는 중")
+    /** 연결 점검용: 차량 신호를 받았는지, 마지막 오류가 무엇인지 */
+    val status: StateFlow<String> = _status.asStateFlow()
+
     private val trunk = DoorArea(DoorValue.REAR)
-    private val driverSeat = SeatArea(SeatValue.ROW_1_LEFT)
 
     private val gearListener = object : GearSelectionListener {
-        override fun onSelected(gear: VehicleGear?) = _state.update { it.copy(gear = gear.toGearState()) }
+        override fun onSelected(gear: VehicleGear?) {
+            _state.update { it.copy(gear = gear.toGearState()) }
+            _status.value = "연결됨"
+        }
         override fun onFailed(e: Exception) = log("gear", e)
     }
     private val fuelListener = object : FuelPercentListener {
@@ -70,7 +73,7 @@ class PleosVehicleSource(context: Context) {
         safely("initialize") { vehicle.initialize() }
 
         val gear = vehicle.getGear()
-        safely("gear.get") { gear.getCurrentGearSelectionState({ g -> _state.update { it.copy(gear = g.toGearState()) } }, { log("gear.get", it) }) }
+        safely("gear.get") { gear.getCurrentGearSelectionState({ g -> _state.update { it.copy(gear = g.toGearState()) }; _status.value = "연결됨" }, { log("gear.get", it) }) }
         safely("gear.register") { gear.registerGearSelection(gearListener) }
 
         val fuel = vehicle.getFuel()
@@ -90,20 +93,6 @@ class PleosVehicleSource(context: Context) {
             safety.getEngineOilLevelState({ s ->
                 _state.update { it.copy(engineOilLow = s == OilLevelState.LOW || s == OilLevelState.CRITICALLY_LOW) }
             }, { log("oil.get", it) })
-        }
-        safely("cabin.get") {
-            vehicle.getHVAC().getHvacTemperatureCurrent(driverSeat, { t -> _state.update { it.copy(cabinTempC = t) } }, { log("cabin.get", it) })
-        }
-    }
-
-    /** 신선식품을 실었을 때 실내 온도를 낮춥니다(CONTROL_CAR_CLIMATE). */
-    fun setCabinTemperature(celsius: Float, onDone: (Boolean) -> Unit = {}) {
-        safely("hvac.set") {
-            vehicle.getHVAC().setHvacTemperature(
-                driverSeat, celsius, TemperatureUnit.CELSIUS,
-                { _, _ -> onDone(true) },
-                { log("hvac.set", it); onDone(false) },
-            )
         }
     }
 
@@ -148,6 +137,7 @@ class PleosVehicleSource(context: Context) {
 
     private fun log(what: String, e: Exception) {
         Log.w(TAG, "Vehicle $what 실패: ${e.message}")
+        if (_status.value != "연결됨") _status.value = "오류($what): ${e.message ?: e.javaClass.simpleName}"
     }
 
     private companion object { const val TAG = "Deulleo" }

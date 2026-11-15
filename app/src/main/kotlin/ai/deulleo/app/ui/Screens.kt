@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -91,8 +92,8 @@ fun DeulleoApp(state: UiState, actions: UiActions) {
 @Composable
 private fun BriefingScreen(state: UiState, a: UiActions) {
     val plan = state.plan
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).fillMaxHeight()) {
+    TwoPane(1f, 1f, first = {
+        Column(Modifier.fillMaxSize()) {
             Label("오늘의 동선 · 정차 중(P)")
             if (plan != null) {
                 Text(
@@ -103,8 +104,8 @@ private fun BriefingScreen(state: UiState, a: UiActions) {
                 plan.stops.forEachIndexed { i, s -> StopLine(i + 1, s) }
             }
         }
-        Spacer(Modifier.width(40.dp))
-        Column(Modifier.weight(1f).fillMaxHeight()) {
+    }, second = {
+        Column(Modifier.fillMaxSize()) {
             Label("들러")
             Text(state.lastSpeech, color = C.Text, fontSize = 22.sp, lineHeight = 33.sp, modifier = Modifier.padding(top = 8.dp).weight(1f))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -115,6 +116,29 @@ private fun BriefingScreen(state: UiState, a: UiActions) {
                     Modifier.height(64.dp).clip(RoundedCornerShape(12.dp)).background(C.Text).clickable(onClick = a.startTrip).padding(horizontal = 44.dp),
                     contentAlignment = Alignment.Center,
                 ) { Text(if (state.tripStarted) "계속 안내" else "출발", color = C.Ink, fontSize = 24.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+    })
+}
+
+/**
+ * 가로 화면에서는 좌우 두 칸, 세로 화면(12.9인치 세로형 등)에서는 위아래 두 칸으로 놓습니다.
+ * Pleos Connect는 차종마다 화면 비율이 달라서 한 가지 배치로 고정하지 않습니다.
+ */
+@Composable
+private fun TwoPane(firstWeight: Float, secondWeight: Float, first: @Composable () -> Unit, second: @Composable () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= maxHeight) {
+            Row(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(firstWeight).fillMaxHeight()) { first() }
+                Spacer(Modifier.width(40.dp))
+                Box(Modifier.weight(secondWeight).fillMaxHeight()) { second() }
+            }
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(firstWeight).fillMaxWidth()) { first() }
+                Spacer(Modifier.height(28.dp))
+                Box(Modifier.weight(secondWeight).fillMaxWidth()) { second() }
             }
         }
     }
@@ -186,8 +210,8 @@ private fun DrivingScreen(state: UiState, a: UiActions) {
 private fun ArrivedScreen(state: UiState, a: UiActions) {
     val stop = state.plan?.nextStop
     val following = state.plan?.stops?.getOrNull(1)
-    Row(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1.2f).fillMaxHeight()) {
+    TwoPane(1.2f, 0.8f, first = {
+        Column(Modifier.fillMaxSize()) {
             Label(if (stop?.errand?.kind == ErrandKind.PICKUP) "픽업 대기 · 정차 중(P)" else "도착 · 정차 중(P)")
             Text(stop?.errand?.place?.name ?: "", color = C.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
             Text(state.lastSpeech, color = C.Soft, fontSize = 22.sp, lineHeight = 33.sp, modifier = Modifier.padding(top = 14.dp))
@@ -195,8 +219,8 @@ private fun ArrivedScreen(state: UiState, a: UiActions) {
                 Text("보낸 알림  ${state.lastNotice.removePrefix("→ ")}", color = C.Acc, fontSize = 17.sp, lineHeight = 25.sp, modifier = Modifier.padding(top = 14.dp))
             }
         }
-        Spacer(Modifier.width(40.dp))
-        Column(Modifier.weight(0.8f).fillMaxHeight()) {
+    }, second = {
+        Column(Modifier.fillMaxSize()) {
             Label("다음")
             if (following != null) {
                 Text(following.errand.place.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
@@ -211,7 +235,7 @@ private fun ArrivedScreen(state: UiState, a: UiActions) {
                 TalkButton(state.voiceState, a.listen)
             }
         }
-    }
+    })
 }
 
 // ---------------- 관리 모드: 아직 계획을 세우지 않았을 때 ----------------
@@ -285,6 +309,13 @@ private fun DemoTools(state: UiState, a: UiActions) {
             if (state.pickupScenario) ToolButton("아이: 끝났어", a.companionReady)
             ToolButton(if (state.pickupScenario) "주말 볼일로" else "하교 픽업으로") { a.loadScenario(!state.pickupScenario) }
             Text("기어 ${state.vehicle.gear} · 연료 ${state.vehicle.fuelPercent ?: "-"}%", color = C.Sub, fontSize = 13.sp)
+        }
+        // 연결 점검: 각 Pleos SDK가 실제로 연결됐는지, 안 됐다면 이유가 무엇인지
+        if (state.sdkStatus.isNotEmpty()) {
+            Text(
+                state.sdkStatus.joinToString("   ") { (name, status) -> "$name: $status" },
+                color = C.Sub, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 6.dp),
+            )
         }
         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(

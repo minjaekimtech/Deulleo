@@ -25,7 +25,7 @@
 | 재출발 | P → D | 현재 볼일 완료 처리, 다음 구간 안내 |
 | 지연 | "40분 늦을 것 같아" | 마감 시간이 안 맞는 가게를 같은 업종의 다른 가게로 바꿔 재계획 |
 | 추가 | "케이크도 사야 해" | 동선에 맞는 빵집을 넣고, 이웃한 볼일이면 "주차는 한 번만" 안내 |
-| 트렁크 | 볼일 장소에서 트렁크 열림 → 닫힘 | 신선식품이면 완료 처리 + "실내 온도 22도로 낮출까요?" → 공조 제어 |
+| 트렁크 | 볼일 장소에서 트렁크 열림 → 닫힘 | 물건을 실은 것으로 보고 완료 처리 + 다음 일정 안내 |
 
 ### B. 평일 하교 픽업 (15:50 출발, 16:30 학원 하원)
 | 단계 | 들러의 동작 |
@@ -45,7 +45,7 @@ deulleo/
 │   ├── voice/IntentParser     한국어 규칙 기반 의도 파서(→ 서비스 단계에서 LLM 도구 호출로 교체)
 │   └── vehicle/VehicleRules   차량 상태 → 차량 관리 할 일, UI 모드 판단
 ├── app/    Pleos Connect 차량 앱 (Kotlin, Jetpack Compose, minSdk 28)
-│   ├── pleos/PleosVehicleSource  Vehicle SDK: Gear·Fuel·EvBattery·Safety(경고등)·Door(트렁크)·HVAC
+│   ├── pleos/PleosVehicleSource  Vehicle SDK: Gear·Fuel·EvBattery·Safety(경고등)·Door(트렁크)
 │   ├── pleos/PleosNavigator      NaviHelper SDK: requestRouteWithWaypoints, 도착 이벤트
 │   ├── pleos/PleosVoice          SpeechToText / TextToSpeech SDK (ko-KR)
 │   ├── pleos/PleosLocation       FusedLocation SDK: 현재 위치, 근접 알림
@@ -102,7 +102,11 @@ deulleo/
    - URL(Windows/Linux): `https://nexus-playground.pleos.ai/repository/raw-releases/connect-avd/2.x/crp-sys-img.xml`
    - URL(Mac): `https://nexus-playground.pleos.ai/repository/raw-releases/connect-avd/2.x/crp-arm64-sys-img.xml`
 2. SDK Platforms → API 34의 **Pleos Connect System Image** 설치 후 Android Studio 재시작
-3. Device Manager → Create device → Form Factor **Automotive** → **Pleos Connect v2.1.0** → RAM 4GB, Cold boot
+3. Device Manager → Create device → Form Factor **Automotive** → **Pleos Connect v2.1.0** → RAM 4GB
+4. AVD 설정의 Boot option을 반드시 **Cold boot**로 둡니다. Quick boot로 켜면 차량 신호(VHAL)가 올라오지 않아 기어·경고등 값을 받지 못합니다.
+5. 음성 인식을 쓰려면 에뮬레이터 Extended Controls → Microphone에서 **Virtual microphone uses host audio input**을 켭니다.
+
+에뮬레이터는 외장 GPU가 필요합니다(Pleos 문서 기준 최소 RTX 3060 Laptop 6GB).
 
 ### 3. 빌드·설치
 ```bash
@@ -117,14 +121,26 @@ adb forward tcp:8088 tcp:8088        # 브라우저에서 http://127.0.0.1:8088/
 ```
 - Virtual Console에서 **기어 P**로 두고 앱을 열면 탑승 브리핑이 나옵니다.
 - [출발] 또는 마이크 → "응" → 기어 **D**로 바꾸면 주행 모드로 전환됩니다.
-- 정차 중 화면 하단 **시연 도구**: 타이어 경고 스위치, 도착 처리, 발화 직접 입력(에뮬레이터에 마이크가 없을 때)
+- Virtual Console의 **Telltales → TPMS**를 켜면 출발 전 브리핑에 타이어 점검 일정이 들어갑니다. **Trunk Position**을 열면 트렁크 안내가 나옵니다.
+- 정차 중 화면 하단 **시연 도구**: 타이어 경고 스위치, 도착 처리, 발화 직접 입력(마이크나 음성 인식을 쓸 수 없을 때)
+- 시연 도구 맨 아래의 **연결 상태** 줄에 SDK별 상태(차량 신호, 내비, 음성 인식, 음성 안내, 위치)가 나옵니다. 연결에 실패하면 이유가 그대로 표시됩니다.
+
+### 5. SDK를 쓸 수 없을 때의 동작
+Pleos Playground의 My Project 화면 기준으로 Vehicle State와 NaviHelper는 바로 쓸 수 있고, SpeechToText·TextToSpeech·FusedLocation은 "준비 중"으로 표시됩니다. 그래서 각 SDK가 없어도 앱이 멈추지 않게 했습니다.
+
+| SDK | 연결 실패 시 |
+|---|---|
+| TextToSpeech | 안드로이드 기본 음성 합성으로 대신 읽습니다 |
+| SpeechToText | 시연 도구의 발화 직접 입력으로 같은 흐름을 진행합니다 |
+| FusedLocation | 도착은 NaviHelper의 도착 이벤트와 시연 도구의 도착 처리로 판단합니다 |
+| Vehicle | 시연 도구의 스위치로 타이어 경고를 흉내 냅니다 |
 
 ## 테스트 환경 및 필요한 설정
 
 | 항목 | 값 |
 |---|---|
 | Pleos Connect Emulator | v2.1.0 (API 34) |
-| 화면 규격 | _(제출 전 기재: AVD 설정의 해상도)_ |
+| 화면 규격 | _(제출 전 기재: AVD 설정의 해상도)_ 가로형·세로형(12.9인치) 모두 배치가 바뀌도록 구성 |
 | minSdk / targetSdk | 28 / 34 |
 | Pleos SDK | Vehicle 2.3.2, NaviHelper 3.0.5, SpeechToText 3.3.1, TextToSpeech 3.3.1, FusedLocation 1.1.3 |
 
@@ -138,8 +154,8 @@ release 서명 키(선택, `keystore.properties`): 없으면 디버그 키로 �
 
 ### 권한
 `app/src/main/AndroidManifest.xml`에 선언한 Pleos 권한: `CAR_DRIVE`, `CAR_ENERGY`, `CAR_SAFETY`, `CAR_DOORS`,
-`CAR_CLIMATE`, `CONTROL_CAR_CLIMATE`, `NAVI_ROUTE`, `NAVI_ROUTE_SEARCH`, `STT_SERVICE`, `TTS_SERVICE`, `FUSED_LOCATION`.
-Pleos 퍼미션은 Pleos App Market과 사전 협의·승인된 범위에서만 사용할 수 있습니다(조회 위주, 제어는 공조만).
+`NAVI_ROUTE`, `NAVI_ROUTE_SEARCH`, `STT_SERVICE`, `TTS_SERVICE`, `FUSED_LOCATION`.
+Pleos 퍼미션은 Pleos App Market과 사전 협의·승인된 범위에서만 사용할 수 있습니다(이 앱은 조회 권한만 쓰고 차량 제어 권한은 쓰지 않습니다).
 
 ## APK 파일 위치
 `apk/성명_Deulleo_release.apk` _(제출 전 `assembleRelease` 결과물을 이 이름으로 복사)_

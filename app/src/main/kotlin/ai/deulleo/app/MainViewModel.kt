@@ -21,8 +21,6 @@ import ai.deulleo.core.vehicle.GearState
 import ai.deulleo.core.vehicle.ModeResolver
 import ai.deulleo.core.vehicle.UiMode
 import ai.deulleo.core.vehicle.VehicleSnapshot
-import ai.deulleo.core.voice.RuleBasedIntentParser
-import ai.deulleo.core.voice.VoiceIntent
 import android.app.Application
 import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
@@ -30,6 +28,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -42,13 +41,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val catalog = SamplePlaceCatalog()
     private val agent = DeulleoAgent(SampleDay.home, catalog)
-    private val parser = RuleBasedIntentParser()
 
     private val _ui = MutableStateFlow(UiState())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
-    /** "꽃을 실었으니 온도 낮출까요?"처럼 예/아니오를 기다리는 질문 */
-    private var pendingConfirm: (() -> Unit)? = null
     private var briefed = false
 
     // 시연용 시계: 시나리오 시작 시각(주말 14:10 / 평일 15:50)부터 실제 경과 시간만큼 흐릅니다.
@@ -65,6 +61,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { voice.utterances.collect(::onUtterance) }
         viewModelScope.launch { voice.partial.collect { p -> _ui.update { it.copy(partialSpeech = p) } } }
         viewModelScope.launch { voice.state.collect { s -> _ui.update { it.copy(voiceState = s) } } }
+        viewModelScope.launch {
+            // 연결 점검: 각 SDK가 실제로 연결됐는지 시연 도구에서 볼 수 있게 모읍니다.
+            combine(vehicle.status, navi.status, voice.sttStatus, voice.ttsStatus, location.status) { v, n, stt, tts, loc ->
+                listOf("차량 신호" to v, "내비 연동" to n, "음성 인식" to stt, "음성 합성" to tts, "위치" to loc)
+            }.collect { list -> _ui.update { it.copy(sdkStatus = list) } }
+        }
         viewModelScope.launch {
             navi.events.collect { e -> if (e is NaviEvent.Arrived) markArrived() }
         }
@@ -125,28 +127,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             agent.plan?.let { if (_ui.value.tripStarted) guide(it) }
         }
 
-        // 볼일 장소에서 트렁크를 열었다 닫음 → 신선식품이면 완료 안내 + 공조 제안
+        // 볼일 장소에서 트렁크를 열었다 닫음 → 산 물건을 실은 것으로 보고 알려 줍니다.
         if (prev.trunkOpen && !s.trunkOpen && _ui.value.arrivedAtStop) {
-            val current = agent.plan?.nextStop?.errand
-            if (current != null && current.perishable) {
-                pendingConfirm = { vehicle.setCabinTemperature(22f) { ok -> say(if (ok) "실내 온도를 22도로 맞췄어요." else "온도를 바꾸지 못했어요.") } }
-                say("${Josa.eunNeun(current.title)} 완료로 할게요. 실내 온도를 22도로 낮춰 둘까요?")
+            agent.plan?.nextStop?.errand?.takeIf { it.kind == ErrandKind.FLEXIBLE }?.let {
+                say("${Josa.eunNeun(it.title)} 끝난 걸로 할게요. 출발하면 다음 목적지로 안내할게요.")
             }
+        }
+
+        // 출발 전에 차량 경고가 새로 켜지거나 꺼지면 계획을 다시 세웁니다.
+        if (briefed && !_ui.value.tripStarted && prev.lowTirePressure != s.lowTirePressure) {
+            agent.setErrands(if (_ui.value.pickupScenario) SamplePickupDay.errands(catalog) else SampleDay.errands(catalog))
+            brief()
         }
         recomputeMode()
     }
 
     private fun onUtterance(text: String) {
-        val intent = parser.parse(text)
-        pendingConfirm?.let { action ->
-            pendingConfirm = null
-            when (intent) {
-                VoiceIntent.Confirm -> { action(); return }
-                VoiceIntent.Reject -> { say("알겠어요."); return }
-                else -> Unit
-            }
-        }
-        apply(agent.onUtterance(text, now(), here()))
+        // 입력은 다듬고 길이를 제한합니다.
+        val cleaned = text.trim().take(MAX_UTTERANCE_LENGTH)
+        if (cleaned.isEmpty()) return
+        apply(agent.onUtterance(cleaned, now(), here()))
     }
 
     private fun markArrived() {
@@ -194,6 +194,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun recomputeMode() = _ui.update {
         it.copy(mode = ModeResolver.resolve(it.vehicle.gear, hasPlan = it.plan != null, arrivedAtStop = it.arrivedAtStop))
     }
+
+    private companion object { const val MAX_UTTERANCE_LENGTH = 60 }
 
     override fun onCleared() {
         vehicle.stop(); navi.stop(); voice.stop(); location.stop()

@@ -17,9 +17,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 import ai.pleos.playground.stt.constant.ErrorType as SttError
 import ai.pleos.playground.stt.constant.Mode as SttMode
+import ai.pleos.playground.stt.listener.OnInitializeListener as SttInitListener
 import ai.pleos.playground.stt.listener.OnServerConnectionListener as SttServerListener
 import ai.pleos.playground.tts.constant.ErrorType as TtsError
 import ai.pleos.playground.tts.constant.Mode as TtsMode
+import ai.pleos.playground.tts.listener.OnInitializeListener as TtsInitListener
 import ai.pleos.playground.tts.listener.OnServerConnectionListener as TtsServerListener
 
 
@@ -30,6 +32,8 @@ import ai.pleos.playground.tts.listener.OnServerConnectionListener as TtsServerL
  * (서버 인식 우선, 네트워크가 끊기면 On-device로 자동 전환)로, 없으면 ON_DEVICE 모드로 동작합니다.
  */
 class PleosVoice(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val hasCredentials = BuildConfig.PLEOS_CLIENT_ID.isNotBlank() && BuildConfig.PLEOS_CLIENT_SECRET.isNotBlank()
 
@@ -60,6 +64,7 @@ class PleosVoice(context: Context) {
         override fun onError(errorType: SttError) {
             Log.w(TAG, "STT 오류: $errorType")
             _state.value = VoiceState.IDLE
+            _sttStatus.value = "오류($errorType) · 시연 도구의 입력을 쓰세요"
         }
     }
 
@@ -72,30 +77,77 @@ class PleosVoice(context: Context) {
         override fun onError(errorType: TtsError) {
             Log.w(TAG, "TTS 오류: $errorType")
             _state.value = VoiceState.IDLE
+            fallBackToPlatformTts("$errorType")
         }
     }
 
+    private val _sttStatus = MutableStateFlow("초기화 중")
+    private val _ttsStatus = MutableStateFlow("초기화 중")
+    /** 연결 점검용 */
+    val sttStatus: StateFlow<String> = _sttStatus.asStateFlow()
+    val ttsStatus: StateFlow<String> = _ttsStatus.asStateFlow()
+
+    /** Pleos 음성 합성을 쓸 수 없을 때 쓰는 안드로이드 기본 음성 합성 */
+    private var platformTts: android.speech.tts.TextToSpeech? = null
+    @Volatile private var usePlatformTts = false
+
     fun start() {
         try {
-            stt.initialize()
             stt.addListener(resultListener)
-            stt.setLocale(Locale.KOREA)
-            tts.initialize()
-            tts.addEventListener(ttsListener)
-            tts.setLocale(Locale.KOREA)
-            if (hasCredentials) registerApps()
+            stt.initialize(object : SttInitListener {
+                override fun onSuccess() {
+                    _sttStatus.value = "연결됨"
+                    runCatching { stt.setLocale(Locale.KOREA) }
+                }
+                override fun onFailure(errorType: SttError) { _sttStatus.value = "사용 불가($errorType) · 시연 도구의 입력을 쓰세요" }
+            })
         } catch (e: Exception) {
-            Log.w(TAG, "음성 SDK 초기화 실패: ${e.message}")
+            Log.w(TAG, "음성 인식 초기화 실패: ${e.message}")
+            _sttStatus.value = "사용 불가(${e.message ?: e.javaClass.simpleName}) · 시연 도구의 입력을 쓰세요"
+        }
+        try {
+            tts.addEventListener(ttsListener)
+            tts.initialize(object : TtsInitListener {
+                override fun onSuccess() {
+                    _ttsStatus.value = "연결됨"
+                    runCatching { tts.setLocale(Locale.KOREA) }
+                }
+                override fun onFailure(errorType: TtsError) { fallBackToPlatformTts("$errorType") }
+            })
+        } catch (e: Exception) {
+            Log.w(TAG, "음성 합성 초기화 실패: ${e.message}")
+            fallBackToPlatformTts(e.message ?: e.javaClass.simpleName)
+        }
+        if (hasCredentials) runCatching { registerApps() }
+    }
+
+    /** Pleos TextToSpeech를 쓸 수 없으면 안드로이드 기본 음성 합성으로 바꿉니다. 시연이 소리 없이 끊기지 않게 하기 위한 대비입니다. */
+    private fun fallBackToPlatformTts(reason: String) {
+        if (usePlatformTts) return
+        usePlatformTts = true
+        _ttsStatus.value = "Pleos 사용 불가($reason) · 기본 음성으로 대체"
+        platformTts = android.speech.tts.TextToSpeech(appContext) { result ->
+            if (result == android.speech.tts.TextToSpeech.SUCCESS) {
+                platformTts?.language = Locale.KOREA
+            } else {
+                _ttsStatus.value = "음성 합성 사용 불가($reason) · 화면 글자로만 안내"
+            }
         }
     }
 
     /** 주행 중 응답은 짧게: 화면 대신 귀로 듣는 정보입니다. */
     fun speak(text: String) {
+        runCatching { stt.stop() }
+        if (usePlatformTts) {
+            runCatching { platformTts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "deulleo") }
+            return
+        }
         try {
-            stt.stop()
             tts.speak(text, true)
         } catch (e: Exception) {
             Log.w(TAG, "speak 실패: ${e.message}")
+            fallBackToPlatformTts(e.message ?: e.javaClass.simpleName)
+            runCatching { platformTts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_ADD, null, "deulleo") }
         }
     }
 
@@ -116,6 +168,7 @@ class PleosVoice(context: Context) {
             stt.release()
             tts.removeEventListener(ttsListener)
             tts.release()
+            platformTts?.shutdown()
         } catch (e: Exception) {
             Log.w(TAG, "음성 SDK 해제 실패: ${e.message}")
         }

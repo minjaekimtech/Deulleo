@@ -32,23 +32,31 @@ class PleosLocation(context: Context) {
     private val _proximity = MutableSharedFlow<Pair<String, Boolean>>(extraBufferCapacity = 8)
     val proximity: SharedFlow<Pair<String, Boolean>> = _proximity.asSharedFlow()
 
+    private val _status = MutableStateFlow("위치 기다리는 중")
+    /** 연결 점검용 */
+    val status: StateFlow<String> = _status.asStateFlow()
+
     private val alertIdToPlace = mutableMapOf<String, String>()
 
     private val listener = object : FusedLocationListener {
         override fun onChanged(data: LocationData?) {
-            data?.let { _location.value = GeoPoint(it.latitude, it.longitude) }
+            data?.let { _location.value = GeoPoint(it.latitude, it.longitude); _status.value = "연결됨" }
         }
-        override fun onError(e: Exception) { Log.w(TAG, "위치 오류: ${e.message}") }
+        override fun onError(e: Exception) {
+            Log.w(TAG, "위치 오류: ${e.message}")
+            _status.value = "오류: ${e.message ?: e.javaClass.simpleName}"
+        }
     }
 
     fun start() {
         try {
             fused.initialize()
-            if (!fused.isSupported()) { Log.w(TAG, "FusedLocation 미지원 환경"); return }
+            if (!fused.isSupported()) { Log.w(TAG, "FusedLocation 미지원 환경"); _status.value = "이 환경에서는 지원하지 않음"; return }
             fused.registerFusedLocationCallback(listener)
             fused.getLastKnownLocation(listener)
         } catch (e: Exception) {
             Log.w(TAG, "FusedLocation 시작 실패: ${e.message}")
+            _status.value = "시작 실패: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 

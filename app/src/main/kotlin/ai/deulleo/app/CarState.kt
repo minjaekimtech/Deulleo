@@ -26,5 +26,7 @@ data class UiState(
     val pickupScenario: Boolean = false,
     /** 마지막으로 동승 예정자에게 보낸 알림(시연 화면 표시용) */
     val lastNotice: String = "",
+    /** 연결 점검: SDK 이름과 상태. 시연 도구에서 보여 줍니다. */
+    val sdkStatus: List<Pair<String, String>> = emptyList(),
 )
 
