@@ -1,6 +1,7 @@
 package ai.deulleo.app.pleos
 
 import ai.deulleo.app.BuildConfig
+import ai.deulleo.app.VoiceState
 import ai.pleos.playground.stt.SpeechToText
 import ai.pleos.playground.stt.listener.ResultListener
 import ai.pleos.playground.tts.TextToSpeech
@@ -21,7 +22,6 @@ import ai.pleos.playground.tts.constant.ErrorType as TtsError
 import ai.pleos.playground.tts.constant.Mode as TtsMode
 import ai.pleos.playground.tts.listener.OnServerConnectionListener as TtsServerListener
 
-enum class VoiceState { IDLE, LISTENING, SPEAKING }
 
 /**
  * SpeechToText SDK v3.3.1 + TextToSpeech SDK v3.3.1 래퍼.

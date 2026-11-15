@@ -269,6 +269,8 @@ class DeulleoAgent(
             if (bestPlan == null || p.score < bestPlan.score) { bestPlan = p; bestPlace = place }
         }
         if (bestPlace == null || bestPlan == null) return AgentReply("$item 사는 곳을 넣으면 시간이 맞지 않아요.", plan)
+        // 같은 가게를 두 번 넣지 않습니다.
+        if (errands.any { it.place.id == bestPlace.id }) return AgentReply("${Josa.eunNeun(bestPlace.name)} 이미 동선에 있어요.", plan)
 
         val before = plan?.homeArriveAt
         errands += Errand("add-${bestPlace.id}", "$item 사기", ErrandKind.FLEXIBLE, bestPlace, 10, perishable = ItemCategories.isPerishable(item))

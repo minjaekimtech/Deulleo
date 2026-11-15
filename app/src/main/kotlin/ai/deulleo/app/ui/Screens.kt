@@ -1,34 +1,30 @@
 package ai.deulleo.app.ui
 
 import ai.deulleo.app.UiState
-import ai.deulleo.app.pleos.VoiceState
+import ai.deulleo.app.VoiceState
 import ai.deulleo.core.model.ErrandKind
 import ai.deulleo.core.model.PlannedStop
 import ai.deulleo.core.model.toClock
 import ai.deulleo.core.vehicle.GearState
 import ai.deulleo.core.vehicle.UiMode
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -44,12 +40,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val Bg = Color(0xFF0D1117)
-private val Card = Color(0xFF16202B)
-private val Chip = Color(0xFF1C2530)
-private val Accent = Color(0xFF3B82F6)
-private val Sub = Color(0xFF8B98A8)
-private val Body = Color(0xFFDBE4EE)
+/**
+ * 차량 화면. 폰 앱과 같은 절제된 팔레트를 쓰고, Pleos 디자인 가이드의 즉시성(1~2초 안에 파악) 원칙에 맞춰
+ * 주행 중에는 다음 목적지·도착 시각·주차 세 가지만 크게 보여 줍니다. 그라데이션·애니메이션·이모지는 쓰지 않습니다.
+ */
+private object C {
+    val Bg = Color(0xFF14171C)
+    val Surf = Color(0xFF1C2026)
+    val Line = Color(0xFF2C313A)
+    val Sub = Color(0xFF8B929E)
+    val Soft = Color(0xFFBFC5CF)
+    val Text = Color(0xFFF4F5F7)
+    val Acc = Color(0xFF7CC4E8)
+    val Warn = Color(0xFFE8A87C)
+    val Ink = Color(0xFF14171C)
+}
 
 /** 화면에서 사용자가 할 수 있는 동작 */
 data class UiActions(
@@ -65,215 +70,238 @@ data class UiActions(
 
 @Composable
 fun DeulleoApp(state: UiState, actions: UiActions) {
-    MaterialTheme(colorScheme = darkColorScheme(primary = Accent, background = Bg, surface = Card)) {
-        Box(Modifier.fillMaxSize().background(Bg).padding(28.dp)) {
-            when (state.mode) {
-                UiMode.MANAGE -> ManageScreen(state, actions)
-                UiMode.BRIEFING -> BriefingScreen(state, actions)
-                UiMode.DRIVING -> DrivingScreen(state, actions)
-                UiMode.ARRIVED -> ArrivedScreen(state, actions)
+    MaterialTheme(
+        colorScheme = darkColorScheme(primary = C.Text, onPrimary = C.Ink, background = C.Bg, surface = C.Surf, onSurface = C.Text, outline = C.Line),
+    ) {
+        Column(Modifier.fillMaxSize().background(C.Bg).padding(horizontal = 40.dp, vertical = 28.dp)) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when (state.mode) {
+                    UiMode.MANAGE -> ManageScreen(state, actions)
+                    UiMode.BRIEFING -> BriefingScreen(state, actions)
+                    UiMode.DRIVING -> DrivingScreen(state, actions)
+                    UiMode.ARRIVED -> ArrivedScreen(state, actions)
+                }
+            }
+            DemoTools(state, actions)
+        }
+    }
+}
+
+// ---------------- 탑승 브리핑 (시동 직후 · P단): 왼쪽에 오늘 순서, 오른쪽에 들러의 말과 출발 버튼 ----------------
+@Composable
+private fun BriefingScreen(state: UiState, a: UiActions) {
+    val plan = state.plan
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            Label("오늘의 동선 · 정차 중(P)")
+            if (plan != null) {
+                Text(
+                    "${plan.startAt.toClock()} 출발 · ${plan.homeArriveAt.toClock()} 집 도착",
+                    color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),
+                )
+                Rule()
+                plan.stops.forEachIndexed { i, s -> StopLine(i + 1, s) }
+            }
+        }
+        Spacer(Modifier.width(40.dp))
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            Label("들러")
+            Text(state.lastSpeech, color = C.Text, fontSize = 22.sp, lineHeight = 33.sp, modifier = Modifier.padding(top = 8.dp).weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                VoiceStatus(state, Modifier.weight(1f))
+                TalkButton(state.voiceState, a.listen)
+                Spacer(Modifier.width(14.dp))
+                Box(
+                    Modifier.height(64.dp).clip(RoundedCornerShape(12.dp)).background(C.Text).clickable(onClick = a.startTrip).padding(horizontal = 44.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text(if (state.tripStarted) "계속 안내" else "출발", color = C.Ink, fontSize = 24.sp, fontWeight = FontWeight.Bold) }
             }
         }
     }
 }
 
-// ---------------- 탑승 브리핑 (시동 직후 · P단): 계획 한 장 + 출발 버튼 하나 ----------------
 @Composable
-private fun BriefingScreen(state: UiState, a: UiActions) {
-    Column(Modifier.fillMaxSize()) {
-        TopLine("들러 · 오늘의 계획", state.clock.toClock())
-        SpeechBubble(state.lastSpeech)
-        Spacer(Modifier.height(16.dp))
-        state.plan?.stops?.forEachIndexed { i, s -> StopRow(i + 1, s) }
-        state.plan?.let {
-            Text("집  ${it.homeArriveAt.toClock()} 도착", color = Body, fontSize = 20.sp, modifier = Modifier.padding(top = 6.dp))
+private fun StopLine(n: Int, s: PlannedStop) {
+    val begin = s.departAt - s.errand.stayMinutes
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(C.Text), contentAlignment = Alignment.Center) {
+            Text("$n", color = C.Ink, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.weight(1f))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PartialSpeech(state)
-            Spacer(Modifier.weight(1f))
-            MicButton(state.voiceState, a.listen)
-            Spacer(Modifier.width(16.dp))
-            Button(
-                onClick = a.startTrip,
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.height(64.dp),
-            ) { Text(if (state.tripStarted) "계속 안내" else "출발", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold) }
+        Text(begin.toClock(), color = C.Text, fontSize = 21.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 14.dp).width(78.dp))
+        Column(Modifier.weight(1f)) {
+            Text(s.errand.title, color = C.Text, fontSize = 21.sp)
+            val parking = s.errand.place.parking?.takeIf { it.note.isNotBlank() }?.let { " · ${it.name} ${it.note}" } ?: ""
+            if (s.errand.place.name != s.errand.title || parking.isNotBlank()) {
+                Text(s.errand.place.name + parking, color = C.Sub, fontSize = 15.sp, modifier = Modifier.padding(top = 2.dp))
+            }
         }
-        DemoTools(state, a)
+        val kind = when (s.errand.kind) {
+            ErrandKind.FIXED -> "예약"; ErrandKind.FLEXIBLE -> "할 일"; ErrandKind.VEHICLE_CARE -> "차량"; ErrandKind.PICKUP -> "픽업"
+        }
+        Text(kind, color = if (s.errand.kind == ErrandKind.VEHICLE_CARE) C.Warn else C.Sub, fontSize = 15.sp)
     }
+    Rule()
 }
 
-// ---------------- 주행 모드: 정보 3개만, 목록·스크롤·버튼 없음(마이크 제외) ----------------
+// ---------------- 주행 모드: 세 가지 정보만. 목록·스크롤·버튼 없음(말하기 제외) ----------------
 @Composable
 private fun DrivingScreen(state: UiState, a: UiActions) {
     val next = state.plan?.nextStop
     Column(Modifier.fillMaxSize()) {
-        TopLine("다음 목적지", progressText(state))
-        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Label("다음 목적지", Modifier.weight(1f))
+            val left = state.plan?.stops?.size ?: 0
+            Label(if (left == 0) "남은 일정 없음" else "남은 일정 ${left}곳")
+        }
         if (next == null) {
-            BigText("집으로\n${state.plan?.homeArriveAt?.toClock() ?: ""} 도착")
+            Text("집", color = C.Text, fontSize = 64.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+            Text("${state.plan?.homeArriveAt?.toClock() ?: ""} 도착", color = C.Acc, fontSize = 64.sp, fontWeight = FontWeight.Bold)
         } else {
-            BigText("${next.errand.place.name}\n${next.arriveAt.toClock()} 도착")
-            Spacer(Modifier.height(16.dp))
-            Row {
-                next.errand.place.parking?.let { pk ->
-                    ChipText("🅿 ${pk.name}${if (pk.note.isNotBlank()) " · ${pk.note}" else ""}")
-                    Spacer(Modifier.width(10.dp))
-                    if (pk.walkMinutes > 0) ChipText("도보 ${pk.walkMinutes}분")
-                }
+            Text(next.errand.place.name, color = C.Text, fontSize = 64.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp))
+            // 도착 시각은 화면에서 색을 쓰는 유일한 정보입니다.
+            Text("${next.arriveAt.toClock()} 도착", color = C.Acc, fontSize = 64.sp, fontWeight = FontWeight.Bold)
+            // 정비소처럼 따로 주차할 필요가 없는 곳은 주차 줄을 보여 주지 않습니다.
+            next.errand.place.parking?.takeIf { it.note.isNotBlank() || it.walkMinutes > 0 }?.let { pk ->
+                val walk = if (pk.walkMinutes > 0) " · 걸어서 ${pk.walkMinutes}분" else ""
+                val prefix = if (next.errand.kind == ErrandKind.PICKUP) "" else "주차 "
+                Text("$prefix${pk.name}${if (pk.note.isNotBlank()) " · ${pk.note}" else ""}$walk", color = C.Soft, fontSize = 26.sp, modifier = Modifier.padding(top = 12.dp))
             }
         }
         Spacer(Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            PartialSpeech(state)
-            Spacer(Modifier.weight(1f))
-            MicButton(state.voiceState, a.listen)
+            Column(Modifier.weight(1f)) {
+                VoiceStatus(state)
+                // 방금 바뀐 내용은 한 문장으로만 보여 줍니다.
+                if (state.tripStarted && state.lastSpeech.isNotBlank() && state.voiceState != VoiceState.LISTENING) {
+                    Text(state.lastSpeech, color = C.Sub, fontSize = 20.sp, lineHeight = 28.sp, maxLines = 2, modifier = Modifier.padding(top = 4.dp, end = 24.dp))
+                }
+            }
+            TalkButton(state.voiceState, a.listen)
         }
     }
 }
 
-// ---------------- 도착 모드: 가게까지 도보 안내, 다음 일정 ----------------
+// ---------------- 도착 모드: 주차 후 걸어가는 길 또는 픽업 대기 안내, 다음 일정 ----------------
 @Composable
 private fun ArrivedScreen(state: UiState, a: UiActions) {
     val stop = state.plan?.nextStop
     val following = state.plan?.stops?.getOrNull(1)
-    Column(Modifier.fillMaxSize()) {
-        TopLine("${stop?.errand?.place?.name ?: ""} 도착", state.clock.toClock())
-        Spacer(Modifier.height(8.dp))
-        val walk = stop?.errand?.place?.parking?.walkMinutes ?: 0
-        BigText(if (walk > 0) "🚶 ${stop?.errand?.place?.name}까지\n도보 ${walk}분" else "🚶 ${stop?.errand?.title ?: ""}", size = 40)
-        SpeechBubble(state.lastSpeech)
-        Spacer(Modifier.height(12.dp))
-        following?.let { ChipText("다음: ${it.errand.place.name} · ${it.arriveAt.toClock()}") }
-        Spacer(Modifier.weight(1f))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PartialSpeech(state)
-            Spacer(Modifier.weight(1f))
-            MicButton(state.voiceState, a.listen)
+    Row(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1.2f).fillMaxHeight()) {
+            Label(if (stop?.errand?.kind == ErrandKind.PICKUP) "픽업 대기 · 정차 중(P)" else "도착 · 정차 중(P)")
+            Text(stop?.errand?.place?.name ?: "", color = C.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+            Text(state.lastSpeech, color = C.Soft, fontSize = 22.sp, lineHeight = 33.sp, modifier = Modifier.padding(top = 14.dp))
+            if (state.lastNotice.isNotBlank()) {
+                Text("보낸 알림  ${state.lastNotice.removePrefix("→ ")}", color = C.Acc, fontSize = 17.sp, lineHeight = 25.sp, modifier = Modifier.padding(top = 14.dp))
+            }
         }
-        DemoTools(state, a)
+        Spacer(Modifier.width(40.dp))
+        Column(Modifier.weight(0.8f).fillMaxHeight()) {
+            Label("다음")
+            if (following != null) {
+                Text(following.errand.place.name, color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                Text("${following.arriveAt.toClock()} 도착 예정", color = C.Sub, fontSize = 19.sp, modifier = Modifier.padding(top = 2.dp))
+            } else {
+                Text("집으로", color = C.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                Text("${state.plan?.homeArriveAt?.toClock() ?: ""} 도착 예정", color = C.Sub, fontSize = 19.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                VoiceStatus(state, Modifier.weight(1f))
+                TalkButton(state.voiceState, a.listen)
+            }
+        }
     }
 }
 
-// ---------------- 관리 모드: 일정·할 일 확인 ----------------
+// ---------------- 관리 모드: 아직 계획을 세우지 않았을 때 ----------------
 @Composable
 private fun ManageScreen(state: UiState, a: UiActions) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TopLine("들러 · 볼일 인박스", state.clock.toClock())
-        Spacer(Modifier.height(12.dp))
+    Column(Modifier.fillMaxSize()) {
+        Label(if (state.pickupScenario) "11월 19일 목요일" else "11월 14일 토요일")
+        Text("오늘 일정 ${state.errands.size}건", color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp))
+        Rule()
         state.errands.forEach { e ->
-            val tag = when (e.kind) {
-                ErrandKind.FIXED -> "일정"
-                ErrandKind.FLEXIBLE -> "할 일"
-                ErrandKind.VEHICLE_CARE -> "차량"
-                ErrandKind.PICKUP -> "픽업"
+            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                Text(e.fixedStart?.toClock() ?: "할 일", color = if (e.fixedStart != null) C.Text else C.Sub, fontSize = 21.sp, modifier = Modifier.width(92.dp))
+                Text(e.title, color = C.Text, fontSize = 21.sp, modifier = Modifier.weight(1f))
+                Text(e.place.name, color = C.Sub, fontSize = 17.sp)
             }
-            val time = e.fixedStart?.toClock()?.let { " · $it" } ?: ""
-            Text("[$tag] ${e.title}$time  —  ${e.place.name}", color = Body, fontSize = 20.sp, modifier = Modifier.padding(vertical = 6.dp))
+            Rule()
         }
-        Spacer(Modifier.height(20.dp))
-        Button(onClick = a.brief, colors = ButtonDefaults.buttonColors(containerColor = Accent)) {
-            Text("오늘 계획 세우기", fontSize = 20.sp)
-        }
-        Text(
-            "폰 앱(스크린샷 인식·캘린더 연동)은 다음 단계에서 붙입니다. 지금은 시연용 일정을 씁니다.",
-            color = Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp),
-        )
-        DemoTools(state, a)
-    }
-}
-
-// ---------------- 시연 도구: 정차 중에만 표시(에뮬레이터용) ----------------
-@Composable
-private fun DemoTools(state: UiState, a: UiActions) {
-    if (state.vehicle.gear == GearState.DRIVE || state.vehicle.gear == GearState.REVERSE) return
-    var text by remember { mutableStateOf("") }
-    Column(Modifier.padding(top = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Chip).padding(12.dp)) {
-        Text("시연 도구 (정차 중에만 표시)", color = Sub, fontSize = 13.sp)
-        if (state.lastNotice.isNotBlank()) Text(state.lastNotice, color = Color(0xFF7FB0FF), fontSize = 14.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("타이어 경고", color = Body, fontSize = 15.sp)
-            Spacer(Modifier.width(8.dp))
-            Switch(checked = state.vehicle.lowTirePressure, onCheckedChange = a.simulateTire)
-            Spacer(Modifier.width(16.dp))
-            OutlinedButton(onClick = a.simulateArrival) { Text("도착 처리") }
-            Spacer(Modifier.width(8.dp))
-            if (state.pickupScenario) OutlinedButton(onClick = a.companionReady) { Text("아이: 끝났어") }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { a.loadScenario(!state.pickupScenario) }) {
-                Text(if (state.pickupScenario) "주말 볼일로" else "하교 픽업으로")
-            }
-            Spacer(Modifier.width(16.dp))
-            Text("기어 ${state.vehicle.gear} · 연료 ${state.vehicle.fuelPercent ?: "-"}%", color = Sub, fontSize = 13.sp)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(value = text, onValueChange = { text = it }, singleLine = true, label = { Text("발화 입력 (예: 케이크도 사야 해)") }, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(onClick = { a.submitText(text); text = "" }) { Text("말하기") }
-        }
+        Spacer(Modifier.weight(1f))
+        Box(
+            Modifier.height(60.dp).clip(RoundedCornerShape(12.dp)).background(C.Text).clickable(onClick = a.brief).padding(horizontal = 36.dp),
+            contentAlignment = Alignment.Center,
+        ) { Text("오늘 동선 짜기", color = C.Ink, fontSize = 21.sp, fontWeight = FontWeight.Bold) }
     }
 }
 
 // ---------------- 공통 요소 ----------------
 @Composable
-private fun TopLine(left: String, right: String) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(left, color = Sub, fontSize = 18.sp)
-        Spacer(Modifier.weight(1f))
-        Text(right, color = Sub, fontSize = 18.sp)
+private fun Label(text: String, modifier: Modifier = Modifier) = Text(text, color = C.Sub, fontSize = 16.sp, modifier = modifier)
+
+@Composable
+private fun Rule() = Box(Modifier.fillMaxWidth().height(1.dp).background(C.Line))
+
+/** 듣는 중·말하는 중 표시. 평소에는 무엇을 말할 수 있는지 한 줄로 알려 줍니다. */
+@Composable
+private fun VoiceStatus(state: UiState, modifier: Modifier = Modifier) {
+    val (text, color) = when (state.voiceState) {
+        VoiceState.LISTENING -> (state.partialSpeech.ifBlank { "듣고 있어요" }) to C.Text
+        VoiceState.SPEAKING -> "말하는 중" to C.Sub
+        VoiceState.IDLE -> "\"케이크도 사야 해\"처럼 말해 보세요" to C.Sub
+    }
+    Text(text, color = color, fontSize = 18.sp, modifier = modifier)
+}
+
+@Composable
+private fun TalkButton(voice: VoiceState, onClick: () -> Unit) {
+    val listening = voice == VoiceState.LISTENING
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        Modifier.height(64.dp).clip(shape)
+            .background(if (listening) C.Acc else C.Bg)
+            .border(1.5.dp, if (listening) C.Acc else C.Sub, shape)
+            .clickable(onClick = onClick).padding(horizontal = 28.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(if (listening) "듣는 중" else "말하기", color = if (listening) C.Ink else C.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
+}
+
+/**
+ * 시연 도구: 에뮬레이터에서 마이크·차량 신호 없이도 흐름을 보여 주기 위한 조작. 정차 중에만, 펼쳤을 때만 보입니다.
+ */
+@Composable
+private fun DemoTools(state: UiState, a: UiActions) {
+    if (state.vehicle.gear == GearState.DRIVE || state.vehicle.gear == GearState.REVERSE) return
+    var open by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        Text(if (open) "시연 도구 닫기" else "시연 도구", color = C.Sub, fontSize = 13.sp, modifier = Modifier.clickable { open = !open }.padding(vertical = 4.dp))
+        if (!open) return@Column
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            ToolButton(if (state.vehicle.lowTirePressure) "타이어 경고 끄기" else "타이어 경고 켜기") { a.simulateTire(!state.vehicle.lowTirePressure) }
+            ToolButton("도착 처리", a.simulateArrival)
+            if (state.pickupScenario) ToolButton("아이: 끝났어", a.companionReady)
+            ToolButton(if (state.pickupScenario) "주말 볼일로" else "하교 픽업으로") { a.loadScenario(!state.pickupScenario) }
+            Text("기어 ${state.vehicle.gear} · 연료 ${state.vehicle.fuelPercent ?: "-"}%", color = C.Sub, fontSize = 13.sp)
+        }
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = text, onValueChange = { text = it.take(60) }, singleLine = true,
+                placeholder = { Text("말 대신 입력 (예: 케이크도 사야 해)", color = C.Sub) }, modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(8.dp))
+            ToolButton("보내기") { if (text.isNotBlank()) a.submitText(text.trim()); text = "" }
+        }
     }
 }
 
 @Composable
-private fun SpeechBubble(text: String) {
-    if (text.isBlank()) return
-    Row(Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Card)) {
-        Box(Modifier.width(4.dp).height(64.dp).background(Accent))
-        Text("\"$text\"", color = Body, fontSize = 18.sp, lineHeight = 26.sp, modifier = Modifier.padding(12.dp))
-    }
-}
-
-@Composable
-private fun StopRow(n: Int, s: PlannedStop) {
-    Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("$n", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        Spacer(Modifier.width(10.dp))
-        Text("${s.errand.place.name}  ${s.arriveAt.toClock()}", color = Body, fontSize = 20.sp)
-        s.errand.place.parking?.let { Text("   🅿 ${it.name}", color = Color(0xFF7FB0FF), fontSize = 17.sp) }
-    }
-}
-
-@Composable
-private fun BigText(text: String, size: Int = 48) =
-    Text(text, color = Color.White, fontSize = size.sp, fontWeight = FontWeight.ExtraBold, lineHeight = (size * 1.2).sp)
-
-@Composable
-private fun ChipText(text: String) =
-    Text(text, color = Body, fontSize = 18.sp, modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Chip).padding(horizontal = 12.dp, vertical = 8.dp))
-
-@Composable
-private fun PartialSpeech(state: UiState) {
-    val label = when (state.voiceState) {
-        VoiceState.LISTENING -> "🗣 ${state.partialSpeech.ifBlank { "듣는 중..." }}"
-        VoiceState.SPEAKING -> "🔊 말하는 중"
-        VoiceState.IDLE -> ""
-    }
-    Text(label, color = Sub, fontSize = 16.sp)
-}
-
-@Composable
-private fun MicButton(voice: VoiceState, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        shape = CircleShape,
-        colors = ButtonDefaults.buttonColors(containerColor = if (voice == VoiceState.LISTENING) Color(0xFFEF4444) else Accent),
-        modifier = Modifier.size(72.dp),
-    ) { Text("🎤", fontSize = 26.sp) }
-}
-
-private fun progressText(state: UiState): String {
-    val left = state.plan?.stops?.size ?: 0
-    return if (left == 0) "남은 볼일 없음" else "남은 볼일 ${left}곳"
+private fun ToolButton(label: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Text(
+        label, color = C.Text, fontSize = 14.sp,
+        modifier = Modifier.padding(end = 8.dp).clip(shape).border(1.dp, C.Line, shape).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+    )
 }

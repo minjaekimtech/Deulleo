@@ -152,17 +152,22 @@ class MobileStore {
 
     // ---- 일정 바꾸기 ----
     fun addItem(text: String) {
-        if (text.isBlank()) return
+        // 입력은 다듬고 길이를 제한합니다. 품목 이름으로 쓰기에 너무 긴 글은 받지 않습니다.
+        val item = text.trim()
+        if (item.isEmpty() || item.length > MAX_ITEM_LENGTH) return
         val before = agent.plan
-        val reply = agent.addItem(text, startAt, here)
-        val added = agent.remainingErrands.lastOrNull()?.id
-        added?.let { sources.getOrPut(it) { "직접 입력" } }
+        val known = agent.remainingErrands.map { it.id }.toSet()
+        val reply = agent.addItem(item, startAt, here)
+        val added = agent.remainingErrands.firstOrNull { it.id !in known }?.id
+        added?.let { sources[it] = "직접 입력" }
         state = state.copy(overlay = Overlay.NONE)
         publish(diff(before, reply.plan, reply.speech), added)
     }
 
     /** 예약 문자 스크린샷에서 인식한 일정을 넣습니다(시연: 17:00 케이크 찾기). */
     fun addFromScreenshot() {
+        // 문자의 날짜가 11월 14일이므로, 다른 날을 보고 있었다면 그날로 옮겨서 넣습니다.
+        if (state.day != TODAY) loadDay(TODAY)
         val before = agent.plan
         val bakery = catalog.places.first { it.id == "bakery-1" }
         val errand = Errand(SHOT_ID, "케이크 찾기", ErrandKind.FIXED, bakery, stayMinutes = 10, fixedStart = 17 * 60)
@@ -202,8 +207,9 @@ class MobileStore {
         val reco = state.recommendation ?: return
         recoDismissed = true
         val before = agent.plan
+        val known = agent.remainingErrands.map { it.id }.toSet()
         val reply = agent.addItem(reco.item, startAt, here)
-        val added = agent.remainingErrands.lastOrNull()?.id
+        val added = agent.remainingErrands.firstOrNull { it.id !in known }?.id
         added?.let { sources[it] = "추천" }
         publish(diff(before, reply.plan, reply.speech), added)
     }
@@ -344,6 +350,7 @@ class MobileStore {
             neighbor != null -> "${neighbor.title} 바로 옆이라 주차는 한 번이에요"
             e.perishable && lastShopping -> "차에 오래 두지 않게 마지막에 들러요"
             e.kind == ErrandKind.FIXED && slack >= 5 -> "${slack}분 일찍 도착해요"
+            e.kind == ErrandKind.FIXED -> "예약 시간에 딱 맞춰 도착해요"
             e.place.closesAt - endAt in 0..45 -> "${clock(e.place.closesAt)} 마감 전에 도착해요"
             e.kind == ErrandKind.FLEXIBLE -> "가는 길에 있는 곳으로 골랐어요"
             else -> null
@@ -385,5 +392,6 @@ class MobileStore {
     private companion object {
         const val CARE_ID = "care-TIRE_PRESSURE"
         const val SHOT_ID = "shot-cake"
+        const val MAX_ITEM_LENGTH = 30
     }
 }

@@ -46,7 +46,7 @@ class RuleBasedIntentParser : IntentParser {
         }
         addRegex.find(text)?.let { m ->
             val item = cleanItem(m.groupValues[1])
-            if (item.isNotEmpty() && item !in setOf("어디", "집", "빨리")) return VoiceIntent.AddErrand(item)
+            if (item.isNotEmpty() && item !in NOT_PLACES) return VoiceIntent.AddErrand(item)
         }
         if (rejectWords.any { text.startsWith(it) }) return VoiceIntent.Reject
         if (confirmWords.any { text == it || text.startsWith("$it ") || text.startsWith(it) && text.length <= it.length + 2 }) {
@@ -75,5 +75,10 @@ class RuleBasedIntentParser : IntentParser {
 
     private fun cleanItem(raw: String): String =
         raw.removePrefix("아").removePrefix("참").trim()
-            .removeSuffix("도").removeSuffix("이랑").removeSuffix("하고").trim()
+            .removeSuffix("도").removeSuffix("이랑").removeSuffix("하고").removeSuffix("에").trim()
+
+    private companion object {
+        /** "집에 가야 해", "빨리 가야 해"처럼 들를 곳이 아닌 말 */
+        val NOT_PLACES = setOf("어디", "집", "빨리", "얼른", "이제", "지금", "먼저", "회사", "거기", "여기")
+    }
 }

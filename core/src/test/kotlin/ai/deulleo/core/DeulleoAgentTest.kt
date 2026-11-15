@@ -72,6 +72,15 @@ class IntentParserTest {
         assertEquals(VoiceIntent.Reject, p.parse("아니 잠깐만"))
         assertEquals(VoiceIntent.CompanionReady, p.parse("지우 끝났대"))
     }
+
+    @Test
+    fun `utterances that are not errands are not turned into errands`() {
+        assertTrue(p.parse("집에 가야 해") !is VoiceIntent.AddErrand, "집에 가는 것은 들를 곳이 아님")
+        assertTrue(p.parse("빨리 가야 해") !is VoiceIntent.AddErrand)
+        assertTrue(p.parse("화장실 가야 해") is VoiceIntent.AddErrand)
+        assertEquals(VoiceIntent.AddErrand("약"), p.parse("약도 사야 해"))
+        assertEquals(VoiceIntent.Unknown(""), p.parse(""))
+    }
 }
 
 class ModeResolverTest {
@@ -164,5 +173,46 @@ class PickupScenarioTest {
         println("준비 신호: ${ready.speech} / 알림: ${ready.notice}")
         assertEquals(AgentAction.StartNavigation, ready.action)
         assertEquals("지우", ready.notice?.to)
+    }
+}
+
+class AgentEdgeCaseTest {
+    private val catalog = SamplePlaceCatalog()
+    private fun agent() = DeulleoAgent(SampleDay.home, catalog).also {
+        it.setErrands(SampleDay.errands(catalog))
+        it.briefing(SampleDay.START_AT, SampleDay.home, VehicleSnapshot(gear = GearState.PARK))
+    }
+
+    @Test
+    fun `adding the same item twice keeps a single errand`() {
+        val a = agent()
+        a.onUtterance("케이크도 사야 해", SampleDay.START_AT, SampleDay.home)
+        val again = a.onUtterance("케이크도 사야 해", SampleDay.START_AT, SampleDay.home)
+        assertEquals(a.remainingErrands.map { it.id }.distinct(), a.remainingErrands.map { it.id })
+        assertTrue(again.speech.contains("이미"))
+    }
+
+    @Test
+    fun `completing every stop leaves an empty plan and next-stop answers gracefully`() {
+        val a = agent()
+        while (a.completeCurrentStop() != null) { /* 모두 완료 */ }
+        assertTrue(a.remainingErrands.isEmpty())
+        assertTrue(a.onUtterance("다음 어디야", 1000, SampleDay.home).speech.contains("집"))
+    }
+
+    @Test
+    fun `removing something that is not there changes nothing`() {
+        val a = agent()
+        val before = a.remainingErrands.size
+        a.onUtterance("세탁소는 빼 줘", SampleDay.START_AT, SampleDay.home)
+        assertEquals(before, a.remainingErrands.size)
+    }
+
+    @Test
+    fun `a huge delay is refused instead of producing a broken plan`() {
+        val a = agent()
+        val reply = a.onUtterance("300분 늦을 것 같아", SampleDay.START_AT, SampleDay.home)
+        assertNotNull(reply.plan)
+        assertTrue(reply.plan!!.stops.all { it.departAt <= it.errand.place.closesAt })
     }
 }

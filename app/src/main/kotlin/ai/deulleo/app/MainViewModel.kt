@@ -5,7 +5,6 @@ import ai.deulleo.app.pleos.PleosLocation
 import ai.deulleo.app.pleos.PleosNavigator
 import ai.deulleo.app.pleos.PleosVehicleSource
 import ai.deulleo.app.pleos.PleosVoice
-import ai.deulleo.app.pleos.VoiceState
 import ai.deulleo.core.AgentAction
 import ai.deulleo.core.AgentReply
 import ai.deulleo.core.DeulleoAgent
@@ -33,24 +32,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-/** 화면이 그리는 상태 전부. */
-data class UiState(
-    val mode: UiMode = UiMode.MANAGE,
-    val plan: Plan? = null,
-    val errands: List<Errand> = emptyList(),
-    val lastSpeech: String = "",
-    val partialSpeech: String = "",
-    val voiceState: VoiceState = VoiceState.IDLE,
-    val vehicle: VehicleSnapshot = VehicleSnapshot(),
-    val tripStarted: Boolean = false,
-    val arrivedAtStop: Boolean = false,
-    val clock: MinuteOfDay = SampleDay.START_AT,
-    /** 시연 시나리오: true = 평일 하교 픽업, false = 주말 볼일 */
-    val pickupScenario: Boolean = false,
-    /** 마지막으로 동승 예정자에게 보낸 알림(시연 화면 표시용) */
-    val lastNotice: String = "",
-)
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
